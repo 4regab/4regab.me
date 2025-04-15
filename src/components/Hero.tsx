@@ -1,0 +1,54 @@
+
+import { ArrowDown } from "lucide-react";
+
+const Hero = () => {
+  return (
+    <section
+      id="hero"
+      className="min-h-screen flex flex-col justify-center relative overflow-hidden gradient-bg pt-16 animate-blur-in"
+    >
+      {/* Background grid effect */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(18,18,23,1)_2px,transparent_2px),linear-gradient(90deg,rgba(18,18,23,1)_2px,transparent_2px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]"></div>
+
+      <div className="container mx-auto px-4 z-10 relative">
+        <div className="max-w-3xl">
+          <h3 className="text-xl md:text-2xl mb-4 neon-text-purple animate-slide-up font-display tracking-wider" style={{ animationDelay: '0.2s' }}>
+           Building AI Web Apps Because I'm Bored
+          </h3>
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 animate-slide-up font-display" style={{ animationDelay: '0.4s' }}>
+            Transforming Ideas into{" "}
+            <span className="neon-text animate-pulse-glow">Intelligent Applications</span>
+          </h1>
+          <p className="text-lg md:text-xl text-foreground/80 mb-8 max-w-2xl animate-slide-up" style={{ animationDelay: '0.6s' }}>
+            Showcasing AI applications that solve complex problems
+            and enhance user experiences across various industries.
+          </p>
+          <div className="flex flex-wrap gap-4 animate-slide-up" style={{ animationDelay: '0.8s' }}>
+            <a
+              href="#projects"
+              className="px-8 py-3 bg-transparent neon-border rounded-sm hover:bg-neon-blue/10 transition-all duration-300"
+            >
+              View Projects
+            </a>
+            <a
+              href="#contact"
+              className="px-8 py-3 bg-neon-blue/20 neon-border-pink rounded-sm hover:bg-neon-pink/10 transition-all duration-300"
+            >
+              Get in Touch
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Scroll indicator */}
+      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
+        <a href="#projects" className="flex flex-col items-center">
+          <span className="text-sm mb-2">Scroll</span>
+          <ArrowDown className="neon-text" size={20} />
+        </a>
+      </div>
+    </section>
+  );
+};
+
+export default Hero;
