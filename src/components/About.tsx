@@ -6,7 +6,7 @@ const About = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           <div>
             <h2 className="text-3xl md:text-4xl font-bold mb-6 font-display">About 4regab</h2>
-            <p className="text-foreground/80 mb-6">Hey! I'm Gab, and I'm based in Metro Manila PH. I'm currently studying for my Bachelor of Science in Information Technology (BSIT). What I'm really passionate about is building awesome web applications that use artificial intelligence. I love tackling complex tech challenges and making them into user-friendly solutions.</p>
+            <p className="text-foreground/80 mb-6">Hey! I'm Gab, I'm really passionate about building awesome web applications that use artificial intelligence. I love tackling complex tech challenges and making them into user-friendly solutions.</p>
             <p className="text-foreground/80 mb-8">With a strong interest in both AI and web technologies, I'm committed to creating tools that address real-world problems and expand what's possible with modern web development.</p>
 
             <div className="flex flex-wrap gap-2 mb-8">
@@ -43,8 +43,7 @@ const About = () => {
                 <div>
                   <h3 className="text-xl font-bold mb-2 font-display">BSIT Student</h3>
                   <p className="text-foreground/70">
-                    Pursuing a Bachelor of Science in Information Technology, continuously learning and applying 
-                    cutting-edge technologies.
+                    Continuously learning and applying cutting-edge technologies.
                   </p>
                 </div>
               </div>
