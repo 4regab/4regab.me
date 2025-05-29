@@ -1,6 +1,7 @@
 import { ArrowRight, Languages, Volume2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { buildSubdomainUrl } from "@/lib/subdomain-utils";
 
 interface ToolItemProps {
   title: string;
@@ -10,27 +11,6 @@ interface ToolItemProps {
   status: "available" | "coming-soon";
   features?: string[];
   isExternal?: boolean;
-}
-
-function getBaseUrl() {
-  if (typeof window === 'undefined') return '';
-  
-  const hostname = window.location.hostname;
-  const protocol = window.location.protocol;
-  
-  // For local development
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `${protocol}//${hostname}:${window.location.port}`;
-  }
-  
-  // For production - extract base domain
-  const parts = hostname.split('.');
-  if (parts.length > 2) {
-    // Remove subdomain to get base domain
-    return `${protocol}//${parts.slice(1).join('.')}`;
-  }
-  
-  return `${protocol}//${hostname}`;
 }
 
 const ToolItem = ({ title, description, icon, href, status, features, isExternal }: ToolItemProps) => {
@@ -94,14 +74,12 @@ const ToolItem = ({ title, description, icon, href, status, features, isExternal
 };
 
 const ToolsList = () => {
-  const baseUrl = getBaseUrl();
-  
   const tools: ToolItemProps[] = [
     {
       title: "AI Translator",
       description: "Translate English text to Tagalog using advanced AI powered by Gemini. Designed specifically for accurate and natural Filipino translations.",
       icon: <Languages size={24} />,
-      href: `${baseUrl.replace(/\/\/([^.]+\.)?/, '//translator.')}/`,
+      href: buildSubdomainUrl('translator'),
       status: "available",
       isExternal: true,
       features: [
@@ -115,7 +93,7 @@ const ToolsList = () => {
       title: "Text to Speech",
       description: "Convert text to natural-sounding speech using Gemini AI with multiple voice options and high-quality audio generation.",
       icon: <Volume2 size={24} />,
-      href: `${baseUrl.replace(/\/\/([^.]+\.)?/, '//tts.')}/`,
+      href: buildSubdomainUrl('tts'),
       status: "available",
       isExternal: true,
       features: [
