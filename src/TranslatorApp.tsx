@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter } from "react-router-dom";
 import TranslatorPage from "./pages/tools/TranslatorPage";
 
 const queryClient = new QueryClient();
@@ -11,7 +12,9 @@ const TranslatorApp = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <TranslatorPage />
+      <BrowserRouter>
+        <TranslatorPage />
+      </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
