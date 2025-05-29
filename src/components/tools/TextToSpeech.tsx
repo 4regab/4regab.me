@@ -1072,7 +1072,7 @@ const TextToSpeech = () => {
               <TabsContent value="prompt" className="space-y-4 mt-6">
                 <div className="neo-card neon-border-blue p-6 bg-neon-blue/5">
                   <div className="text-sm text-foreground/90 leading-relaxed">
-                    <strong className="text-foreground font-semibold">Prompt-Based Control:</strong> Type instructions directly into your text to control voice style.
+                    <strong className="text-foreground font-semibold">Prompt-Based Control:</strong> Control the voice style, tone, accent, and pace using prompts.
                     <br />
                     <span className="text-xs text-foreground/70 mt-2 block">
                       <strong>Example:</strong> "Speak slowly and clearly: Welcome to our service."
