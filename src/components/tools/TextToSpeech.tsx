@@ -109,22 +109,33 @@ const TextToSpeech = () => {
   const [retryCount, setRetryCount] = useState(0);  // Store detected format for download filename
   const [detectedFormat, setDetectedFormat] = useState<string>('mp3');
   const [canRetry, setCanRetry] = useState(false);
-
   // Load API key from localStorage on component mount
   useEffect(() => {
-    const savedApiKey = localStorage.getItem('gemini-api-key');
-    if (savedApiKey) {
-      setApiKey(savedApiKey);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const savedApiKey = localStorage.getItem('gemini-api-key');
+        if (savedApiKey) {
+          setApiKey(savedApiKey);
+        }
+      }
+    } catch (error) {
+      console.warn('localStorage access blocked:', error);
     }
   }, []);
 
   // Save API key to localStorage whenever it changes
   const handleApiKeyChange = (newApiKey: string) => {
     setApiKey(newApiKey);
-    if (newApiKey.trim()) {
-      localStorage.setItem('gemini-api-key', newApiKey);
-    } else {
-      localStorage.removeItem('gemini-api-key');
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        if (newApiKey.trim()) {
+          localStorage.setItem('gemini-api-key', newApiKey);
+        } else {
+          localStorage.removeItem('gemini-api-key');
+        }
+      }
+    } catch (error) {
+      console.warn('localStorage access blocked:', error);
     }
   };
 
@@ -699,44 +710,43 @@ const TextToSpeech = () => {
                 Settings
               </Button>
             </DialogTrigger>
-            <DialogContent className="neo-card neon-border">
-              <DialogHeader>
+            <DialogContent className="neo-card neon-border">              <DialogHeader>
                 <DialogTitle className="font-display">TTS Configuration</DialogTitle>
                 <DialogDescription>
                   Configure your Text-to-Speech settings
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="api-key">Gemini API Key</Label>
-                  <Input
-                    id="api-key"
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => handleApiKeyChange(e.target.value)}
-                    placeholder="Enter your Gemini API key"
-                  />
-                </div>
-                
-                <Alert>
-                  <AlertDescription>
-                    <strong>Quick Tutorial:</strong>
-                    <ol className="list-decimal list-inside mt-2 space-y-1 text-sm">
-                      <li>Go to <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-neon-blue hover:underline">Google AI Studio</a></li>
-                      <li>Sign in with your Google account</li>
-                      <li>Click "Create API Key"</li>
-                      <li>Copy the generated key and paste it above</li>
-                      <li>Your key is stored locally and never sent to our servers</li>
-                    </ol>
-                  </AlertDescription>
-                </Alert>
-                
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={() => setShowApiDialog(false)} 
-                    className="flex-1 bg-neon-purple/20 neon-border hover:bg-neon-purple/30"
-                    disabled={!apiKey.trim()}
-                  >
+              <form onSubmit={(e) => { e.preventDefault(); setShowApiDialog(false); }}>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="api-key">Gemini API Key</Label>
+                    <Input
+                      id="api-key"
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => handleApiKeyChange(e.target.value)}
+                      placeholder="Enter your Gemini API key"
+                    />
+                  </div>
+                  
+                  <Alert>
+                    <AlertDescription>
+                      <strong>Quick Tutorial:</strong>
+                      <ol className="list-decimal list-inside mt-2 space-y-1 text-sm">
+                        <li>Go to <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-neon-blue hover:underline">Google AI Studio</a></li>
+                        <li>Sign in with your Google account</li>
+                        <li>Click "Create API Key"</li>
+                        <li>Copy the generated key and paste it above</li>
+                        <li>Your key is stored locally and never sent to our servers</li>
+                      </ol>
+                    </AlertDescription>
+                  </Alert>
+                  
+                  <div className="flex gap-2">
+                    <Button 
+                      type="submit"
+                      className="flex-1 bg-neon-purple/20 neon-border hover:bg-neon-purple/30"
+                      disabled={!apiKey.trim()}                    >
                     Save Configuration
                   </Button>
                   {apiKey.trim() && (
@@ -749,7 +759,8 @@ const TextToSpeech = () => {
                     </Button>
                   )}
                 </div>
-              </div>
+                </div>
+              </form>
             </DialogContent>
           </Dialog>
         </div>
