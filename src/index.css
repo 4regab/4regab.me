@@ -54,10 +54,44 @@
   body {
     @apply bg-background text-foreground antialiased selection:bg-neon-blue/20 selection:text-neon-blue;
     font-feature-settings: "ss01", "ss02", "cv01", "cv02", "cv03";
+    line-height: 1.6;
   }
   
   html {
     @apply scroll-smooth;
+  }
+
+  /* Enhanced text readability */
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.025em;
+    font-weight: 600;
+  }
+
+  p, span, div {
+    line-height: 1.65;
+  }
+
+  /* Better contrast for labels and descriptions */
+  label {
+    color: hsl(var(--foreground) / 0.9);
+  }
+
+  /* Enhanced form controls readability */
+  input, textarea, select {
+    line-height: 1.5;
+  }
+
+  /* Better readability for buttons */
+  button {
+    font-weight: 500;
+    letter-spacing: 0.025em;
+  }
+
+  /* Improved code/kbd elements */
+  code, kbd {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    font-size: 0.875em;
+    font-weight: 500;
   }
 }
 

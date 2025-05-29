@@ -3,7 +3,56 @@ import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocation, Link, useNavigate } from "react-router-dom";
-import { navigateToSubdomain, getSubdomain, buildSubdomainUrl } from "@/lib/subdomain-utils";
+
+// Helper function to get current subdomain
+function getCurrentSubdomain() {
+  if (typeof window === 'undefined') return '';
+  
+  const hostname = window.location.hostname;
+  
+  // For local development, check URL parameters to simulate subdomains
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    const params = new URLSearchParams(window.location.search);
+    const subdomain = params.get('subdomain');
+    return subdomain || '';
+  }
+  
+  // For production with custom domain
+  const parts = hostname.split('.');
+  if (parts.length > 2) {
+    return parts[0];
+  }
+  
+  return '';
+}
+
+// Helper function to navigate to main domain
+function navigateToMainDomain(path: string = '/') {
+  if (typeof window === 'undefined') return;
+  
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  
+  // For local development
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    window.location.href = `${protocol}//${hostname}:${window.location.port}${path}`;
+    return;
+  }
+  
+  // For production
+  const parts = hostname.split('.');
+  let baseDomain;
+  
+  if (parts.length > 2) {
+    // We're on a subdomain, get the base domain
+    baseDomain = parts.slice(1).join('.');
+  } else {
+    // We're on the main domain
+    baseDomain = hostname;
+  }
+  
+  window.location.href = `${protocol}//${baseDomain}${path}`;
+}
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -33,31 +82,30 @@ const Navbar = () => {
     }
     setIsOpen(false); // Close mobile menu if open
   };
-
   const handleToolsClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    const currentSubdomain = getSubdomain();
+    const currentSubdomain = getCurrentSubdomain();
     
-    // If we're already on the tools subdomain, don't navigate
-    if (currentSubdomain === 'tools') {
-      return;
+    // If we're already on the main domain, use regular navigation
+    if (!currentSubdomain) {
+      navigate('/tools');
+    } else {
+      // Navigate to main domain tools page
+      navigateToMainDomain('/tools');
     }
-    
-    // Navigate to tools subdomain
-    navigateToSubdomain('tools');
     setIsOpen(false); // Close mobile menu if open
   };
 
   const handleHomeClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    const currentSubdomain = getSubdomain();
+    const currentSubdomain = getCurrentSubdomain();
     
     // If we're already on the main domain, use regular navigation
     if (!currentSubdomain) {
       navigate('/');
     } else {
       // Navigate to main domain
-      navigateToSubdomain('');
+      navigateToMainDomain('/');
     }
     setIsOpen(false); // Close mobile menu if open
   };
@@ -125,17 +173,15 @@ const Navbar = () => {
             4REGAB
           </span>
           <span className="absolute -inset-1 -z-10 opacity-0 group-hover:opacity-100 blur-md bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink rounded-lg transition-opacity duration-500"></span>
-        </Link>
-
-        <div className="hidden md:flex items-center space-x-8">
+        </Link>        <div className="hidden md:flex items-center space-x-8">
           {menuItems.map((item) => {
             let isActive = false;
-            const currentSubdomain = getSubdomain();
+            const currentSubdomain = getCurrentSubdomain();
             
             if (item.name === 'Home') {
               isActive = !currentSubdomain && location.pathname === '/';
             } else if (item.name === 'Tools') {
-              isActive = currentSubdomain === 'tools';
+              isActive = location.pathname === '/tools';
             } else if (item.name === 'Projects') {
               isActive = !currentSubdomain && location.pathname === '/' && activeItem === 'projects';
             }
@@ -179,16 +225,15 @@ const Navbar = () => {
       <div className={cn(
         "md:hidden absolute top-full left-0 right-0 bg-background/95 backdrop-blur-md border-b border-white/10 py-4 px-4 transform transition-all duration-500 ease-in-out",
         isOpen ? "translate-y-0 opacity-100" : "translate-y-[-10px] opacity-0 pointer-events-none"
-      )}>
-        <div className="flex flex-col space-y-4">
+      )}>        <div className="flex flex-col space-y-4">
           {menuItems.map((item) => {
             let isActive = false;
-            const currentSubdomain = getSubdomain();
+            const currentSubdomain = getCurrentSubdomain();
             
             if (item.name === 'Home') {
               isActive = !currentSubdomain && location.pathname === '/';
             } else if (item.name === 'Tools') {
-              isActive = currentSubdomain === 'tools';
+              isActive = location.pathname === '/tools';
             } else if (item.name === 'Projects') {
               isActive = !currentSubdomain && location.pathname === '/' && activeItem === 'projects';
             }

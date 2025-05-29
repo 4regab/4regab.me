@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Volume2, Download, Play, Pause, Settings, Loader2, RotateCcw, Square } from "lucide-react";
+import { Volume2, Download, Play, Pause, Settings, Loader2, RotateCcw, Square, MessageSquare, Sliders, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -8,11 +8,32 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface VoiceOption {
   name: string;
   description: string;
 }
+
+interface DetailedSettings {
+  speed: number;              // 0.70 to 1.20, 0.95 is normal
+  stability: number;          // 0% to 100%, 50% is normal
+  similarity: number;         // 0% to 100%, 50% is normal (voice consistency)
+  styleExaggeration: number;  // 0% to 100%, 50% is normal (expressiveness level)
+  speakerBoost: boolean;      // true/false
+}
+
+const DEFAULT_DETAILED_SETTINGS: DetailedSettings = {
+  speed: 0.95,       // Normal speed (0.70-1.20 range)
+  stability: 50,     // 50% stability
+  similarity: 50,    // 50% similarity
+  styleExaggeration: 50, // 50% style exaggeration
+  speakerBoost: false,
+};
+
+type ControlMode = "prompt" | "detailed";
 
 const VOICE_OPTIONS: VoiceOption[] = [
   { name: "Zephyr", description: "Bright" },
@@ -48,8 +69,10 @@ const VOICE_OPTIONS: VoiceOption[] = [
 ];
 
 const MODEL_OPTIONS = [
-  { value: "gemini-2.5-pro-preview-tts", label: "Gemini 2.5 Pro Preview TTS" },
-  { value: "gemini-2.5-flash-preview-tts", label: "Gemini 2.5 Flash Preview TTS" }
+  { value: "gemini-2.5-flash-preview-tts", label: "Gemini 2.5 Flash Preview TTS" },
+  { value: "gemini-2.5-flash-exp-native-audio-thinking-dialog", label: "Gemini 2.5 Flash Exp Native Audio Thinking Dialog" },
+  { value: "gemini-2.5-flash-preview-native-audio-dialog", label: "Gemini 2.5 Flash Preview Native Audio Dialog" },
+  { value: "gemini-2.0-flash-live-001", label: "Gemini 2.0 Flash Live 001" }
 ];
 
 // Helper function to calculate variance (for PCM detection)
@@ -106,9 +129,85 @@ const TextToSpeech = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [showApiDialog, setShowApiDialog] = useState(false);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
-  const [retryCount, setRetryCount] = useState(0);  // Store detected format for download filename
+  const [retryCount, setRetryCount] = useState(0);
   const [detectedFormat, setDetectedFormat] = useState<string>('mp3');
   const [canRetry, setCanRetry] = useState(false);
+    // New state for control modes and detailed settings
+  const [controlMode, setControlMode] = useState<ControlMode>("prompt");
+  const [detailedSettings, setDetailedSettings] = useState<DetailedSettings>(DEFAULT_DETAILED_SETTINGS);
+  const [isVoiceControlCollapsed, setIsVoiceControlCollapsed] = useState(false);  // Helper functions for detailed settings
+  const constructPromptFromSettings = (originalText: string): string => {
+    if (controlMode === "prompt") {
+      return originalText;
+    }
+
+    const instructions: string[] = [];
+      // Speed mapping (0.70 to 1.20 range)
+    if (detailedSettings.speed < 0.85) {
+      instructions.push("speak very slowly and deliberately");
+    } else if (detailedSettings.speed < 0.92) {
+      instructions.push("speak slowly");
+    } else if (detailedSettings.speed > 1.10) {
+      instructions.push("speak very quickly");
+    } else if (detailedSettings.speed > 1.02) {
+      instructions.push("speak at a brisk pace");
+    }
+
+    // Stability mapping
+    if (detailedSettings.stability > 70) {
+      instructions.push("with a very stable and consistent voice");
+    } else if (detailedSettings.stability > 55) {
+      instructions.push("with a stable voice");
+    } else if (detailedSettings.stability < 30) {
+      instructions.push("with natural voice variations and fluctuations");
+    }
+
+    // Similarity mapping (voice consistency)
+    if (detailedSettings.similarity > 70) {
+      instructions.push("maintaining perfect voice character consistency");
+    } else if (detailedSettings.similarity > 55) {
+      instructions.push("with consistent voice character");
+    } else if (detailedSettings.similarity < 30) {
+      instructions.push("with varied voice character and tone");
+    }
+
+    // Style Exaggeration mapping (expressiveness level)
+    if (detailedSettings.styleExaggeration > 70) {
+      instructions.push("with dramatic expression and high emotional intensity");
+    } else if (detailedSettings.styleExaggeration > 55) {
+      instructions.push("with enhanced expression and emotion");
+    } else if (detailedSettings.styleExaggeration < 30) {
+      instructions.push("in a subtle, understated style with minimal expression");
+    } else if (detailedSettings.styleExaggeration < 45) {
+      instructions.push("with moderate, natural expression");
+    }
+
+    // Speaker boost mapping
+    if (detailedSettings.speakerBoost) {
+      instructions.push("with enhanced volume and vocal presence");
+    }
+
+    if (instructions.length > 0) {
+      const instructionText = instructions.join(", ");
+      return `${instructionText}: ${originalText}`;
+    }
+
+    return originalText;
+  };
+
+  const resetDetailedSettings = () => {
+    setDetailedSettings(DEFAULT_DETAILED_SETTINGS);
+  };
+
+  const updateDetailedSetting = <K extends keyof DetailedSettings>(
+    key: K,
+    value: DetailedSettings[K]
+  ) => {
+    setDetailedSettings(prev => ({
+      ...prev,
+      [key]: value
+    }));  };
+
   // Load API key from localStorage on component mount
   useEffect(() => {
     try {
@@ -138,7 +237,6 @@ const TextToSpeech = () => {
       console.warn('localStorage access blocked:', error);
     }
   };
-
   const generateSpeech = async () => {
     if (!inputText.trim()) {
       setError("Please enter text to convert to speech");
@@ -160,6 +258,9 @@ const TextToSpeech = () => {
     setAudioUrl(null);
 
     try {
+      // Construct the final text based on control mode
+      const finalText = constructPromptFromSettings(inputText);
+
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: {
@@ -170,7 +271,7 @@ const TextToSpeech = () => {
             {
               parts: [
                 {
-                  text: inputText
+                  text: finalText
                 }
               ]
             }
@@ -186,11 +287,11 @@ const TextToSpeech = () => {
             }
           }
         })
-      });      if (!response.ok) {
+      });if (!response.ok) {
         let errorMessage = `API Error: ${response.status} ${response.statusText}`;
         
         if (response.status === 429) {
-          errorMessage = "Rate limit exceeded. Please wait 24 hours or change your API key to continue. Consider using shorter text or switching to gemini-2.5-flash-preview-tts for better rate limits.";
+          errorMessage = "Rate limit exceeded. Please wait 24 hours or change your API key to continue. Consider using shorter text.";
         } else if (response.status === 401) {
           errorMessage = "Invalid API key. Please check your Gemini API key and try again.";
         } else if (response.status === 403) {
@@ -794,183 +895,407 @@ const TextToSpeech = () => {
         audioElement.removeEventListener('ended', handleEnded);
       }
     };
-  }, [audioElement]);
-
-  return (
+  }, [audioElement]);  return (
     <Card className="neo-card neon-border animate-slide-up">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 font-display">
-          <Volume2 className="text-neon-purple" size={24} />
-          Text to Speech
+      <CardHeader className="pb-8 border-b border-foreground/10">
+        <CardTitle className="flex items-center gap-3 font-display text-2xl font-bold tracking-tight">
+          <Volume2 className="text-neon-purple" size={32} />
+          <span className="text-foreground">Text to Speech</span>
         </CardTitle>
-        <CardDescription>
-          Convert text to natural-sounding speech using Gemini AI with multiple voice options
+        <CardDescription className="text-lg text-foreground/80 leading-relaxed mt-3 max-w-3xl">
+          Convert text to natural-sounding speech using Gemini AI with multiple voice options and fine-grained controls
         </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex justify-between items-center">
-          <Label htmlFor="input-text" className="text-sm font-medium">
-            Text to Convert
-          </Label>
+      </CardHeader>      <CardContent className="space-y-8 pt-6">
+        <div className="flex justify-between items-start">
+          <div>
+            <Label htmlFor="input-text" className="text-lg font-semibold text-foreground block mb-2">
+              Text to Convert
+            </Label>
+            <p className="text-sm text-foreground/60">
+              Enter the text you want to convert to speech
+            </p>
+          </div>
           <Dialog open={showApiDialog} onOpenChange={setShowApiDialog}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="neon-border">
+              <Button variant="outline" size="sm" className="neon-border text-sm font-medium">
                 <Settings size={16} className="mr-2" />
-                Settings
+                API Settings
               </Button>
-            </DialogTrigger>
-            <DialogContent className="neo-card neon-border">              <DialogHeader>
-                <DialogTitle className="font-display">TTS Configuration</DialogTitle>
-                <DialogDescription>
-                  Configure your Text-to-Speech settings
+            </DialogTrigger>            <DialogContent className="neo-card neon-border max-w-lg">
+              <DialogHeader className="pb-6">
+                <DialogTitle className="font-display text-xl font-bold text-foreground">TTS Configuration</DialogTitle>
+                <DialogDescription className="text-base text-foreground/80 leading-relaxed">
+                  Configure your Text-to-Speech API settings to get started
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={(e) => { e.preventDefault(); setShowApiDialog(false); }}>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="api-key">Gemini API Key</Label>
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <Label htmlFor="api-key" className="text-sm font-semibold text-foreground">Gemini API Key</Label>
                     <Input
                       id="api-key"
                       type="password"
                       value={apiKey}
                       onChange={(e) => handleApiKeyChange(e.target.value)}
                       placeholder="Enter your Gemini API key"
+                      className="text-sm h-11"
                     />
                   </div>
                   
-                  <Alert>
-                    <AlertDescription>
-                      <strong>Quick Tutorial:</strong>
-                      <ol className="list-decimal list-inside mt-2 space-y-1 text-sm">
-                        <li>Go to <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-neon-blue hover:underline">Google AI Studio</a></li>
+                  <Alert className="bg-blue-50/50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800">
+                    <AlertDescription className="text-sm text-foreground/90 leading-relaxed">
+                      <strong className="text-foreground font-semibold">Quick Setup Guide:</strong>
+                      <ol className="list-decimal list-inside mt-4 space-y-2 text-sm leading-relaxed">
+                        <li>Visit <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-neon-blue hover:underline font-medium">Google AI Studio</a></li>
                         <li>Sign in with your Google account</li>
-                        <li>Click "Create API Key"</li>
+                        <li>Click "Create API Key" button</li>
                         <li>Copy the generated key and paste it above</li>
-                        <li>Your key is stored locally and never sent to our servers</li>
+                        <li className="text-foreground/70 text-xs">Your key is stored locally and never sent to our servers</li>
                       </ol>
                     </AlertDescription>
                   </Alert>
-                  
-                  <div className="flex gap-2">
+                    <div className="flex gap-3 pt-3">
                     <Button 
                       type="submit"
-                      className="flex-1 bg-neon-purple/20 neon-border hover:bg-neon-purple/30"
-                      disabled={!apiKey.trim()}                    >
-                    Save Configuration
-                  </Button>
-                  {apiKey.trim() && (
-                    <Button 
-                      onClick={() => handleApiKeyChange('')}
-                      variant="outline"
-                      className="neon-border text-red-400 hover:bg-red-500/10"
+                      className="flex-1 bg-neon-purple/20 neon-border hover:bg-neon-purple/30 font-medium h-11 text-white"
+                      disabled={!apiKey.trim()}
                     >
-                      Clear
+                      Save Configuration
                     </Button>
-                  )}
-                </div>
+                    {apiKey.trim() && (
+                      <Button 
+                        onClick={() => handleApiKeyChange('')}
+                        variant="outline"
+                        className="neon-border text-red-400 hover:bg-red-500/10 font-medium h-11"
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </form>
             </DialogContent>
           </Dialog>
-        </div>
-
-        {/* Model and Voice Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="model-select" className="text-sm font-medium mb-2 block">
-              Model
-            </Label>
-            <Select value={selectedModel} onValueChange={setSelectedModel}>
-              <SelectTrigger className="neon-border">
-                <SelectValue placeholder="Select model" />
-              </SelectTrigger>
-              <SelectContent className="neo-card neon-border">
-                {MODEL_OPTIONS.map((model) => (
-                  <SelectItem key={model.value} value={model.value}>
-                    {model.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        </div>        {/* Model and Voice Selection */}
+        <div className="space-y-6 border border-foreground/10 rounded-lg p-6 bg-background/50">
+          <div className="border-b border-foreground/10 pb-3">
+            <h3 className="text-xl font-bold text-foreground tracking-tight">
+              Model & Voice Configuration
+            </h3>
+            <p className="text-sm text-foreground/70 mt-1">
+              Select your preferred AI model and voice character
+            </p>
           </div>
-
-          <div>
-            <Label htmlFor="voice-select" className="text-sm font-medium mb-2 block">
-              Voice
-            </Label>
-            <Select value={selectedVoice} onValueChange={setSelectedVoice}>
-              <SelectTrigger className="neon-border">
-                <SelectValue placeholder="Select voice" />
-              </SelectTrigger>
-              <SelectContent className="neo-card neon-border max-h-60">
-                {VOICE_OPTIONS.map((voice) => (
-                  <SelectItem key={voice.name} value={voice.name}>
-                    {voice.name} - {voice.description}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="model-select" className="text-sm font-semibold text-foreground block mb-2">
+                  AI Model
+                </Label>
+                <p className="text-xs text-foreground/60 mb-3">
+                  Choose the AI model for speech generation
+                </p>
+              </div>
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger className="neon-border h-12 text-sm font-medium">
+                  <SelectValue placeholder="Select AI model" />
+                </SelectTrigger>
+                <SelectContent className="neo-card neon-border">
+                  {MODEL_OPTIONS.map((model) => (
+                    <SelectItem key={model.value} value={model.value} className="text-sm py-4">
+                      <div className="font-medium">{model.label}</div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>            <div className="space-y-4">
+              <div>
+                <Label htmlFor="voice-select" className="text-sm font-semibold text-foreground block mb-2">
+                  Voice Character
+                </Label>
+                <p className="text-xs text-foreground/60 mb-3">
+                  Pick a voice that matches your content style
+                </p>
+              </div>
+              <Select value={selectedVoice} onValueChange={setSelectedVoice}>
+                <SelectTrigger className="neon-border h-12 text-sm font-medium">
+                  <SelectValue placeholder="Select voice character" />
+                </SelectTrigger>
+                <SelectContent className="neo-card neon-border max-h-60">
+                  {VOICE_OPTIONS.map((voice) => (
+                    <SelectItem key={voice.name} value={voice.name} className="text-sm py-4">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-foreground">{voice.name}</span>
+                        <span className="text-xs text-foreground/70">{voice.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        </div>
+        </div>        {/* Control Mode Tabs */}
+        <div className="space-y-6 border border-foreground/10 rounded-lg p-6 bg-background/50">
+          <div className="border-b border-foreground/10 pb-3">
+            <button
+              onClick={() => setIsVoiceControlCollapsed(!isVoiceControlCollapsed)}
+              className="flex items-center justify-between w-full text-left group hover:text-foreground/90 transition-colors"
+            >
+              <div>
+                <h3 className="text-xl font-bold text-foreground tracking-tight">
+                  Voice Control Settings
+                </h3>
+                <p className="text-sm text-foreground/70 mt-1">
+                  Choose how you want to control the voice characteristics
+                </p>
+              </div>
+              {isVoiceControlCollapsed ? (
+                <ChevronDown className="w-5 h-5 text-foreground/70 group-hover:text-foreground transition-colors" />
+              ) : (
+                <ChevronUp className="w-5 h-5 text-foreground/70 group-hover:text-foreground transition-colors" />
+              )}
+            </button>
+          </div>
+          {!isVoiceControlCollapsed && (
+            <Tabs value={controlMode} onValueChange={(value) => setControlMode(value as ControlMode)}>
+              <TabsList className="grid w-full grid-cols-2 neon-border h-12">
+                <TabsTrigger value="prompt" className="flex items-center gap-2 font-medium">
+                  <MessageSquare size={16} />
+                  Prompt-Based Control
+                </TabsTrigger>
+                <TabsTrigger value="detailed" className="flex items-center gap-2 font-medium">
+                  <Sliders size={16} />
+                  Detailed Settings
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="prompt" className="space-y-4 mt-6">
+                <div className="neo-card neon-border-blue p-6 bg-neon-blue/5">
+                  <div className="text-sm text-foreground/90 leading-relaxed">
+                    <strong className="text-foreground font-semibold">Prompt-Based Control:</strong> Type instructions directly into your text to control voice style.
+                    <br />
+                    <span className="text-xs text-foreground/70 mt-2 block">
+                      <strong>Example:</strong> "Speak slowly and clearly: Welcome to our service."
+                    </span>
+                  </div>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="detailed" className="space-y-6 mt-6">
+                <div className="neo-card neon-border-purple p-6 bg-neon-purple/5 space-y-6">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-base font-semibold text-foreground">Voice Settings</span>
+                      <p className="text-xs text-foreground/70 mt-1">
+                        Fine-tune voice characteristics with precise controls
+                      </p>
+                    </div>
+                    <Button
+                      onClick={resetDetailedSettings}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs neon-border font-medium"
+                    >
+                      <RotateCcw size={12} className="mr-1" />
+                      Reset
+                    </Button>
+                  </div>
+                    {/* Speed Control */}
+                  <div className="space-y-3 p-4 border border-foreground/10 rounded-lg bg-background/30">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm font-semibold text-foreground">Speed</Label>
+                      <span className="text-xs text-foreground/70 font-medium bg-foreground/10 px-2 py-1 rounded">
+                        {detailedSettings.speed < 0.85 ? 'Very Slow' :
+                         detailedSettings.speed < 0.92 ? 'Slow' :
+                         detailedSettings.speed > 1.10 ? 'Very Fast' :
+                         detailedSettings.speed > 1.02 ? 'Fast' : 'Normal'} ({detailedSettings.speed.toFixed(2)})
+                      </span>
+                    </div>
+                    <Slider
+                      value={[detailedSettings.speed]}
+                      onValueChange={(value) => updateDetailedSetting('speed', value[0])}
+                      max={1.20}
+                      min={0.70}
+                      step={0.01}
+                      className="neon-border"
+                    />
+                    <p className="text-xs text-foreground/60">
+                      Controls how fast or slow the speech is delivered
+                    </p>
+                  </div>
 
-        <Textarea
-          id="input-text"
-          placeholder="Enter text to convert to speech..."
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onKeyDown={handleKeyPress}
-          className="min-h-[120px] resize-none"
-        />
+                  {/* Stability Control */}
+                  <div className="space-y-3 p-4 border border-foreground/10 rounded-lg bg-background/30">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm font-semibold text-foreground">Stability</Label>
+                      <span className="text-xs text-foreground/70 font-medium bg-foreground/10 px-2 py-1 rounded">
+                        {detailedSettings.stability > 70 ? 'Very Stable' :
+                         detailedSettings.stability > 55 ? 'Stable' :
+                         detailedSettings.stability < 30 ? 'Variable' : 'Normal'} ({detailedSettings.stability}%)
+                      </span>
+                    </div>
+                    <Slider
+                      value={[detailedSettings.stability]}
+                      onValueChange={(value) => updateDetailedSetting('stability', value[0])}
+                      max={100}
+                      min={0}
+                      step={1}
+                      className="neon-border"
+                    />
+                    <p className="text-xs text-foreground/60">
+                      Higher values create more consistent voice output
+                    </p>
+                  </div>
 
-        <div className="flex gap-2">
+                  {/* Similarity Control */}
+                  <div className="space-y-3 p-4 border border-foreground/10 rounded-lg bg-background/30">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm font-semibold text-foreground">Similarity</Label>
+                      <span className="text-xs text-foreground/70 font-medium bg-foreground/10 px-2 py-1 rounded">
+                        {detailedSettings.similarity > 70 ? 'Consistent' :
+                         detailedSettings.similarity > 55 ? 'Stable' :
+                         detailedSettings.similarity < 30 ? 'Varied' : 'Normal'} ({detailedSettings.similarity}%)
+                      </span>
+                    </div>
+                    <Slider
+                      value={[detailedSettings.similarity]}
+                      onValueChange={(value) => updateDetailedSetting('similarity', value[0])}
+                      max={100}
+                      min={0}
+                      step={1}
+                      className="neon-border"
+                    />
+                    <p className="text-xs text-foreground/60">
+                      Controls how closely the voice follows the original character
+                    </p>
+                  </div>
+
+                  {/* Style Exaggeration Control */}
+                  <div className="space-y-3 p-4 border border-foreground/10 rounded-lg bg-background/30">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm font-semibold text-foreground">Style Exaggeration</Label>
+                      <span className="text-xs text-foreground/70 font-medium bg-foreground/10 px-2 py-1 rounded">
+                        {detailedSettings.styleExaggeration > 70 ? 'Dramatic' :
+                         detailedSettings.styleExaggeration > 55 ? 'Enhanced' :
+                         detailedSettings.styleExaggeration < 30 ? 'Subtle' :
+                         detailedSettings.styleExaggeration < 45 ? 'Moderate' : 'Normal'} ({detailedSettings.styleExaggeration}%)
+                      </span>
+                    </div>
+                    <Slider
+                      value={[detailedSettings.styleExaggeration]}
+                      onValueChange={(value) => updateDetailedSetting('styleExaggeration', value[0])}
+                      max={100}
+                      min={0}
+                      step={1}
+                      className="neon-border"
+                    />
+                    <p className="text-xs text-foreground/60">
+                      Adjusts the emotional expressiveness and emphasis in speech
+                    </p>
+                  </div>
+
+                  {/* Speaker Boost Toggle */}
+                  <div className="flex items-center justify-between p-4 border border-foreground/10 rounded-lg bg-background/30">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-semibold text-foreground">Speaker Boost</Label>
+                      <p className="text-xs text-foreground/60">
+                        Enhance volume and vocal presence for clearer audio
+                      </p>
+                    </div>
+                    <Switch
+                      checked={detailedSettings.speakerBoost}
+                      onCheckedChange={(checked) => updateDetailedSetting('speakerBoost', checked)}
+                    />
+                  </div>
+
+                  {/* Settings Preview */}
+                  <div className="text-xs text-foreground/70 p-4 bg-background/50 rounded-lg border border-foreground/10">
+                    <strong className="text-foreground font-semibold">Generated instructions:</strong> 
+                    <span className="text-foreground/80 ml-2">
+                      {constructPromptFromSettings("your text").replace("your text", "").replace(/:\s*$/, "") || "No modifications applied"}
+                    </span>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
+        </div>{/* Text Input Section */}
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="input-text" className="text-lg font-semibold text-foreground block mb-2">
+              Text Input
+            </Label>
+            <p className="text-sm text-foreground/70 mb-4">
+              Enter or paste the text you want to convert to speech
+            </p>
+          </div>
+          <Textarea
+            id="input-text"
+            placeholder="Enter text to convert to speech..."
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyPress}
+            className="min-h-[140px] resize-none text-sm leading-relaxed neon-border font-medium"
+          />
+        </div>        {/* Action Buttons */}
+        <div className="flex gap-3">
           <Button 
             onClick={generateSpeech} 
             disabled={isLoading || !inputText.trim()}
-            className="bg-neon-purple/20 neon-border hover:bg-neon-purple/30 transition-all duration-300"
+            className="bg-neon-purple/20 neon-border hover:bg-neon-purple/30 transition-all duration-300 h-12 px-6 font-semibold text-white"
           >
             {isLoading ? (
-              <Loader2 className="animate-spin w-4 h-4 mr-2" />
+              <Loader2 className="animate-spin w-5 h-5 mr-2 text-white" />
             ) : (
-              <Volume2 size={16} className="mr-2" />
+              <Volume2 size={18} className="mr-2 text-white" />
             )}
             {isLoading ? "Generating..." : "Generate Speech"}
           </Button>
-        </div>        {error && (
-          <Alert className="border-red-500/50 bg-red-500/10">
-            <AlertDescription className="text-red-400">
-              {error}
-              {canRetry && (
-                <div className="mt-3">
-                  <Button
-                    onClick={retryGeneration}
-                    variant="outline"
-                    size="sm"
-                    disabled={isLoading}
-                    className="text-xs"
-                  >
-                    Retry ({3 - retryCount} attempts left)
-                  </Button>
-                </div>
-              )}
+        </div>{/* Error Display */}
+        {error && (
+          <Alert className="border-red-500/50 bg-red-500/10 p-4">
+            <AlertDescription className="text-red-300 font-medium leading-relaxed">
+              <div className="flex flex-col space-y-2">
+                <span>{error}</span>
+                {canRetry && (
+                  <div className="pt-2">
+                    <Button
+                      onClick={retryGeneration}
+                      variant="outline"
+                      size="sm"
+                      disabled={isLoading}
+                      className="text-xs font-medium border-red-400/50 hover:bg-red-500/20"
+                    >
+                      Retry ({3 - retryCount} attempts left)
+                    </Button>
+                  </div>
+                )}
+              </div>
             </AlertDescription>
           </Alert>
         )}
 
+        {/* Audio Output Section */}
         {audioUrl && (
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Generated Audio</Label>
-            <div className="neo-card neon-border-purple p-4 bg-neon-purple/5">
-              <div className="flex items-center gap-3">                <Button
+          <div className="space-y-4 border border-foreground/10 rounded-lg p-6 bg-background/50">
+            <div className="border-b border-foreground/10 pb-3">
+              <Label className="text-lg font-semibold text-foreground">Generated Audio</Label>
+              <p className="text-sm text-foreground/70 mt-1">
+                Your text has been converted to speech successfully
+              </p>
+            </div>
+            <div className="neo-card neon-border-purple p-5 bg-neon-purple/5">
+              <div className="flex items-center gap-4 flex-wrap">                <Button
                   onClick={isPlaying ? pauseAudio : playAudio}
                   variant="outline"
                   size="sm"
-                  className="neon-border-purple hover:bg-neon-purple/10"
+                  className="neon-border-purple hover:bg-neon-purple/10 h-11 px-4 font-medium"
                   disabled={!audioUrl}
                 >
                   {isPlaying ? (
-                    <Pause size={16} className="mr-2" />
+                    <Pause size={18} className="mr-2" />
                   ) : (
-                    <Play size={16} className="mr-2" />
+                    <Play size={18} className="mr-2" />
                   )}
                   {isPlaying ? "Pause" : audioElement && audioElement.paused ? "Resume" : "Play"}
                 </Button>
@@ -980,9 +1305,9 @@ const TextToSpeech = () => {
                     onClick={stopAudio}
                     variant="outline"
                     size="sm"
-                    className="neon-border-red hover:bg-red-500/10"
+                    className="neon-border-red hover:bg-red-500/10 h-11 px-4 font-medium"
                   >
-                    <Square size={16} className="mr-2" />
+                    <Square size={18} className="mr-2" />
                     Stop
                   </Button>
                 )}
@@ -991,22 +1316,28 @@ const TextToSpeech = () => {
                   onClick={downloadAudio}
                   variant="outline"
                   size="sm"
-                  className="neon-border-green hover:bg-neon-green/10"
+                  className="neon-border-green hover:bg-neon-green/10 h-11 px-4 font-medium"
                 >
-                  <Download size={16} className="mr-2" />
+                  <Download size={18} className="mr-2" />
                   Download
                 </Button>
                 
-                <span className="text-sm text-foreground/60">
-                  Voice: {selectedVoice} ({VOICE_OPTIONS.find(v => v.name === selectedVoice)?.description})
-                </span>
+                <div className="text-sm text-foreground/70 bg-foreground/10 px-3 py-2 rounded-lg">
+                  <span className="font-medium">Voice:</span> {selectedVoice} 
+                  <span className="text-foreground/60 ml-1">
+                    ({VOICE_OPTIONS.find(v => v.name === selectedVoice)?.description})
+                  </span>
+                </div>
               </div>
             </div>
           </div>
-        )}        <div className="text-xs text-foreground/60 text-center space-y-1">
-          <div>Press Ctrl + Enter to generate speech quickly • Supports 24 languages</div>
-          <div className="text-foreground/40">
-            💡 Tip: Use shorter text for better success rates • Switch to Flash model if you hit rate limits
+        )}        {/* Usage Tips */}
+        <div className="text-center space-y-3 p-4 bg-background/30 rounded-lg border border-foreground/10">
+          <div className="text-sm text-foreground/80 font-medium">
+            Press <kbd className="px-2 py-1 bg-foreground/10 rounded text-xs font-semibold">Ctrl + Enter</kbd> to generate speech quickly • Supports 24 languages
+          </div>
+          <div className="text-xs text-foreground/60 leading-relaxed">
+            💡 <strong>Pro Tips:</strong> Use shorter text for better success rates • Try different voices to find your perfect match
           </div>
         </div>
       </CardContent>

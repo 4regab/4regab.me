@@ -1,8 +1,33 @@
 import { ArrowRight, Languages, Volume2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildSubdomainUrl, getSubdomain } from "@/lib/subdomain-utils";
-import { useNavigate } from "react-router-dom";
+
+// Helper function to build URLs for tool subdomains
+function buildToolUrl(subdomain: string) {
+  if (typeof window === 'undefined') return '';
+  
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  
+  // For local development
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return `${protocol}//${hostname}:${window.location.port}?subdomain=${subdomain}`;
+  }
+  
+  // For production - use dedicated subdomains
+  const parts = hostname.split('.');
+  let baseDomain;
+  
+  if (parts.length > 2) {
+    // We're on a subdomain, get the base domain
+    baseDomain = parts.slice(1).join('.');
+  } else {
+    // We're on the main domain
+    baseDomain = hostname;
+  }
+  
+  return `${protocol}//${subdomain}.${baseDomain}/`;
+}
 
 interface ToolItemProps {
   title: string;
@@ -16,64 +41,54 @@ interface ToolItemProps {
 
 const ToolItem = ({ title, description, icon, href, status, features, internalRoute }: ToolItemProps) => {
   const isAvailable = status === "available";
-  const navigate = useNavigate();
-  const currentSubdomain = getSubdomain();
   
   const handleClick = () => {
     if (!isAvailable) return;
     
-    // If we're on the tools subdomain and there's an internal route, use React Router navigation
-    if (currentSubdomain === 'tools' && internalRoute) {
-      navigate(internalRoute);
-    } else {
-      // Otherwise, use external navigation (for when not on tools subdomain)
-      window.open(href, '_blank', 'noopener,noreferrer');
-    }
+    // Always navigate to the tool's dedicated subdomain
+    window.location.href = href;
   };
-  
-  return (
+    return (
     <Card className={`neo-card neon-border transition-all duration-300 hover:scale-105 ${!isAvailable ? 'opacity-60' : 'hover:shadow-lg hover:shadow-neon-purple/20'}`}>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-3 font-display">
+      <CardHeader className="pb-4">
+        <CardTitle className="flex items-center gap-3 font-display text-xl font-bold tracking-tight">
           <div className="text-neon-purple">
             {icon}
           </div>
-          {title}
+          <span className="text-foreground">{title}</span>
           {!isAvailable && (
-            <span className="text-xs bg-neon-blue/20 text-neon-blue px-2 py-1 rounded-full">
+            <span className="text-xs bg-neon-blue/20 text-neon-blue px-3 py-1 rounded-full font-medium">
               Coming Soon
             </span>
           )}
         </CardTitle>
-        <CardDescription className="text-foreground/70">
+        <CardDescription className="text-foreground/80 text-base leading-relaxed">
           {description}
         </CardDescription>
-      </CardHeader>
-      <CardContent>
+      </CardHeader>      <CardContent className="pt-2">
         {features && (
-          <div className="mb-4">
-            <h4 className="text-sm font-medium mb-2">Features:</h4>
-            <ul className="text-sm text-foreground/60 space-y-1">
+          <div className="mb-6">
+            <h4 className="text-sm font-semibold mb-3 text-foreground">Features:</h4>
+            <ul className="text-sm text-foreground/70 space-y-2">
               {features.map((feature, index) => (
-                <li key={index} className="flex items-center gap-2">
-                  <div className="w-1 h-1 bg-neon-purple rounded-full"></div>
-                  {feature}
+                <li key={index} className="flex items-center gap-3">
+                  <div className="w-2 h-2 bg-neon-purple rounded-full flex-shrink-0"></div>
+                  <span className="leading-relaxed">{feature}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
-        
-        {isAvailable ? (
+          {isAvailable ? (
           <Button 
             onClick={handleClick}
-            className="w-full bg-neon-purple/20 neon-border hover:bg-neon-purple/30 transition-all duration-300 group"
+            className="w-full bg-neon-purple/20 neon-border hover:bg-neon-purple/30 transition-all duration-300 group h-12 font-semibold text-white"
           >
             Use Tool
-            <ArrowRight size={16} className="ml-2 group-hover:translate-x-1 transition-transform" />
+            <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform text-white" />
           </Button>
         ) : (
-          <Button disabled className="w-full" variant="outline">
+          <Button disabled className="w-full h-12 font-semibold" variant="outline">
             Coming Soon
           </Button>
         )}
@@ -82,13 +97,12 @@ const ToolItem = ({ title, description, icon, href, status, features, internalRo
   );
 };
 
-const ToolsList = () => {
-  const tools: ToolItemProps[] = [
+const ToolsList = () => {  const tools: ToolItemProps[] = [
     {
       title: "AI Translator",
       description: "Translate English text to Tagalog using advanced AI powered by Gemini. Designed specifically for accurate and natural Filipino translations.",
       icon: <Languages size={24} />,
-      href: buildSubdomainUrl('translator'),
+      href: buildToolUrl('translator'),
       internalRoute: "/translator",
       status: "available",
       features: [
@@ -102,7 +116,7 @@ const ToolsList = () => {
       title: "Text to Speech",
       description: "Convert text to natural-sounding speech using Gemini AI with multiple voice options and high-quality audio generation.",
       icon: <Volume2 size={24} />,
-      href: buildSubdomainUrl('tts'),
+      href: buildToolUrl('tts'),
       internalRoute: "/text-to-speech",
       status: "available",
       features: [

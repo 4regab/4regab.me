@@ -193,46 +193,49 @@ Before finalizing the translation, review it against these criteria:
     }
   };
 
-  return (
-    <Card className="neo-card neon-border animate-slide-up">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 font-display">
-          <Languages className="text-neon-blue" size={24} />
-          English to Tagalog Translator
+  return (    <Card className="neo-card neon-border animate-slide-up">
+      <CardHeader className="pb-8 border-b border-foreground/10">
+        <CardTitle className="flex items-center gap-3 font-display text-2xl font-bold tracking-tight">
+          <Languages className="text-neon-blue" size={32} />
+          <span className="text-foreground">English to Tagalog Translator</span>
         </CardTitle>
-        <CardDescription>
-          Translate English text to Tagalog
+        <CardDescription className="text-lg text-foreground/80 leading-relaxed mt-3 max-w-3xl">
+          Translate English text to natural, accurate Tagalog using advanced AI
         </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex justify-between items-center">
-          <Label htmlFor="input-text" className="text-sm font-medium">
-            English Text
-          </Label>
+      </CardHeader>      <CardContent className="space-y-8 pt-6">
+        <div className="flex justify-between items-start">
+          <div>
+            <Label htmlFor="input-text" className="text-lg font-semibold text-foreground block mb-2">
+              English Text
+            </Label>
+            <p className="text-sm text-foreground/60">
+              Enter the English text you want to translate to Tagalog
+            </p>
+          </div>
           <Dialog open={showApiDialog} onOpenChange={setShowApiDialog}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="neon-border">
+              <Button variant="outline" size="sm" className="neon-border text-sm font-medium">
                 <Settings size={16} className="mr-2" />
                 API Settings
               </Button>
             </DialogTrigger>
-            <DialogContent className="neo-card neon-border">              <DialogHeader>
-                <DialogTitle className="font-display">Gemini API Configuration</DialogTitle>
-                <DialogDescription>
-                  Enter your Google Gemini API key to use the translator
+            <DialogContent className="neo-card neon-border max-w-lg">              <DialogHeader className="pb-6">
+                <DialogTitle className="font-display text-xl font-bold text-foreground">Gemini API Configuration</DialogTitle>
+                <DialogDescription className="text-base text-foreground/80 leading-relaxed">
+                  Enter your Google Gemini API key to enable translation services
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={(e) => { e.preventDefault(); setShowApiDialog(false); }}>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="api-key">API Key</Label>
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <Label htmlFor="api-key" className="text-sm font-semibold text-foreground">API Key</Label>
                     <div className="relative">                    <Input
                         id="api-key"
                         type={showApiKey ? "text" : "password"}
                         value={apiKey}
                         onChange={(e) => handleApiKeyChange(e.target.value)}
                         placeholder="Enter your Gemini API key"
-                        className="pr-10"
+                        className="pr-12 text-sm h-11"
                       />
                       <Button
                         type="button"
@@ -250,22 +253,21 @@ Before finalizing the translation, review it against these criteria:
                     </div>
                   </div>
                   
-                  <Alert>
-                    <AlertDescription>
-                      <strong>Quick Tutorial:</strong>
-                      <ol className="list-decimal list-inside mt-2 space-y-1 text-sm">
-                        <li>Go to <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-neon-blue hover:underline">Google AI Studio</a></li>
+                  <Alert className="bg-blue-50/50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800">
+                    <AlertDescription className="text-sm text-foreground/90 leading-relaxed">
+                      <strong className="text-foreground font-semibold">Quick Tutorial:</strong>
+                      <ol className="list-decimal list-inside mt-4 space-y-2 text-sm leading-relaxed">
+                        <li>Go to <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-neon-blue hover:underline font-medium">Google AI Studio</a></li>
                         <li>Sign in with your Google account</li>
                         <li>Click "Create API Key"</li>
                         <li>Copy the generated key and paste it above</li>
-                        <li>Your key is stored locally and never sent to our servers</li>
+                        <li className="text-foreground/70 text-xs">Your key is stored locally and never sent to our servers</li>
                       </ol>
                     </AlertDescription>                </Alert>
-                  
-                  <div className="flex gap-2">
+                    <div className="flex gap-3 pt-3">
                     <Button 
                       type="submit"
-                      className="flex-1 bg-neon-blue/20 neon-border hover:bg-neon-blue/30"
+                      className="flex-1 bg-neon-blue/20 neon-border hover:bg-neon-blue/30 font-medium h-11 text-white"
                       disabled={!apiKey.trim()}
                     >
                       Save Configuration
@@ -275,7 +277,7 @@ Before finalizing the translation, review it against these criteria:
                         type="button"
                         onClick={() => handleApiKeyChange('')}
                         variant="outline"
-                        className="neon-border text-red-400 hover:bg-red-500/10"
+                        className="neon-border text-red-400 hover:bg-red-500/10 font-medium h-11"
                       >
                         Clear
                       </Button>
@@ -285,27 +287,28 @@ Before finalizing the translation, review it against these criteria:
               </form>
             </DialogContent>
           </Dialog>
+        </div>        {/* Text Input Section */}
+        <div className="space-y-4">
+          <Textarea
+            id="input-text"
+            placeholder="Enter English text to translate to Tagalog..."
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyPress}
+            className="min-h-[140px] resize-none text-sm leading-relaxed neon-border font-medium"
+          />
         </div>
 
-        <Textarea
-          id="input-text"
-          placeholder="Enter English text to translate to Tagalog..."
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onKeyDown={handleKeyPress}
-          className="min-h-[120px] resize-none"
-        />
-
-        <div className="flex gap-2">
-          <Button 
+        {/* Action Buttons */}
+        <div className="flex gap-3">          <Button 
             onClick={translateText} 
             disabled={isLoading || !inputText.trim()}
-            className="bg-neon-blue/20 neon-border hover:bg-neon-blue/30 transition-all duration-300"
+            className="bg-neon-blue/20 neon-border hover:bg-neon-blue/30 transition-all duration-300 h-12 px-6 font-semibold text-white"
           >
             {isLoading ? (
-              <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full mr-2" />
+              <div className="animate-spin w-5 h-5 border-2 border-current border-t-transparent rounded-full mr-2" />
             ) : (
-              <Send size={16} className="mr-2" />
+              <Send size={18} className="mr-2 text-white" />
             )}
             {isLoading ? "Translating..." : "Translate"}
           </Button>
@@ -314,37 +317,50 @@ Before finalizing the translation, review it against these criteria:
             <Button
               onClick={copyToClipboard}
               variant="outline"
-              className="neon-border-green hover:bg-neon-green/10"
+              className="neon-border-green hover:bg-neon-green/10 h-12 px-6 font-semibold"
             >
               {isCopied ? (
-                <Check size={16} className="mr-2 text-neon-green" />
+                <Check size={18} className="mr-2 text-neon-green" />
               ) : (
-                <Copy size={16} className="mr-2" />
+                <Copy size={18} className="mr-2" />
               )}
               {isCopied ? "Copied!" : "Copy"}
             </Button>
           )}
         </div>
 
+        {/* Error Display */}
         {error && (
-          <Alert className="border-red-500/50 bg-red-500/10">
-            <AlertDescription className="text-red-400">
+          <Alert className="border-red-500/50 bg-red-500/10 p-4">
+            <AlertDescription className="text-red-300 font-medium leading-relaxed">
               {error}
             </AlertDescription>
           </Alert>
         )}
 
+        {/* Translation Output */}
         {translatedText && (
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Tagalog Translation</Label>
-            <div className="neo-card neon-border-green p-4 bg-neon-green/5">
-              <p className="whitespace-pre-wrap">{translatedText}</p>
+          <div className="space-y-4 border border-foreground/10 rounded-lg p-6 bg-background/50">
+            <div className="border-b border-foreground/10 pb-3">
+              <Label className="text-lg font-semibold text-foreground">Tagalog Translation</Label>
+              <p className="text-sm text-foreground/70 mt-1">
+                Your English text has been translated to natural Tagalog
+              </p>
+            </div>
+            <div className="neo-card neon-border-green p-5 bg-neon-green/5">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed font-medium text-foreground">{translatedText}</p>
             </div>
           </div>
         )}
 
-        <div className="text-xs text-foreground/60 text-center">
-          Press Ctrl + Enter to translate quickly
+        {/* Usage Tips */}
+        <div className="text-center space-y-3 p-4 bg-background/30 rounded-lg border border-foreground/10">
+          <div className="text-sm text-foreground/80 font-medium">
+            Press <kbd className="px-2 py-1 bg-foreground/10 rounded text-xs font-semibold">Ctrl + Enter</kbd> to translate quickly
+          </div>
+          <div className="text-xs text-foreground/60 leading-relaxed">
+            💡 <strong>Pro Tip:</strong> This translator specializes in natural, contextually accurate Tagalog translations
+          </div>
         </div>
       </CardContent>
     </Card>
