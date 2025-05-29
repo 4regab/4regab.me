@@ -1,7 +1,7 @@
 import { ArrowRight, Languages, Volume2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildSubdomainUrl } from "@/lib/subdomain-utils.ts";
+import { buildSubdomainUrl } from "@/lib/subdomain-utils";
 
 interface ToolItemProps {
   title: string;
