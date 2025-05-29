@@ -354,57 +354,73 @@ const TextToSpeech = () => {
       setCanRetry(false);
     }
   };  const playAudio = async () => {
-    if (audioUrl && !isPlaying) {
-      try {
-        // Create audio element
-        const audio = new Audio();
-        setAudioElement(audio);
-        
-        // Set up event listeners before setting src
-        audio.onended = () => {
-          setIsPlaying(false);
-          setAudioElement(null);
-        };
-        
-        audio.onerror = (e) => {
-          console.error('Audio playback error:', e);
-          setIsPlaying(false);
-          setAudioElement(null);
-          
-          // Try alternative approaches
-          tryAlternativePlayback();
-        };
-
-        audio.oncanplaythrough = () => {
-          console.log('Audio can play through');
-        };
-
-        audio.onloadstart = () => {
-          console.log('Audio load started');
-        };
-
-        audio.onloadeddata = () => {
-          console.log('Audio data loaded');
-        };
-        
-        // Set source and load
-        audio.src = audioUrl;
-        audio.load();
-        
-        // Play the audio and handle promise
+    if (!audioUrl) return;
+    
+    try {
+      // If we have an existing audio element that's paused, resume it
+      if (audioElement && audioElement.paused && !audioElement.ended) {
+        console.log('Resuming paused audio');
         setIsPlaying(true);
-        await audio.play();
-        
-      } catch (playError) {
-        console.error('Play error:', playError);
+        await audioElement.play();
+        return;
+      }
+      
+      // If audio element exists but is not paused, don't create a new one
+      if (audioElement && !audioElement.paused) {
+        console.log('Audio is already playing');
+        return;
+      }
+      
+      // Create new audio element only if we don't have one or it's ended
+      console.log('Creating new audio element');
+      const audio = new Audio();
+      setAudioElement(audio);
+      
+      // Set up event listeners before setting src
+      audio.onended = () => {
+        console.log('Audio ended');
+        setIsPlaying(false);
+        setAudioElement(null);
+      };
+      
+      audio.onerror = (e) => {
+        console.error('Audio playback error:', e);
         setIsPlaying(false);
         setAudioElement(null);
         
-        // Try alternative playback method
+        // Try alternative approaches
         tryAlternativePlayback();
-      }
+      };
+
+      audio.oncanplaythrough = () => {
+        console.log('Audio can play through');
+      };
+
+      audio.onloadstart = () => {
+        console.log('Audio load started');
+      };
+
+      audio.onloadeddata = () => {
+        console.log('Audio data loaded');
+      };
+      
+      // Set source and load
+      audio.src = audioUrl;
+      audio.load();
+      
+      // Play the audio and handle promise
+      setIsPlaying(true);
+      await audio.play();
+      
+    } catch (playError) {
+      console.error('Play error:', playError);
+      setIsPlaying(false);
+      setAudioElement(null);
+      
+      // Try alternative playback method
+      tryAlternativePlayback();
     }
-  };  const tryAlternativePlayback = async () => {
+  };const tryAlternativePlayback = async () => {
     if (!audioUrl) return;
     
     try {
@@ -532,18 +548,40 @@ const TextToSpeech = () => {
       console.error('Alternative playback failed:', err);
       setError("Unable to play audio with any method. The audio format may not be supported by your browser. Please try downloading the file.");
     }
-  };
-  const pauseAudio = () => {
-    if (audioElement && isPlaying) {
+  };  const pauseAudio = () => {
+    if (audioElement) {
       try {
-        audioElement.pause();
-        setIsPlaying(false);
-        // Don't set audioElement to null so we can resume
+        console.log('Pause audio called - current state:', {
+          paused: audioElement.paused,
+          ended: audioElement.ended,
+          currentTime: audioElement.currentTime,
+          isPlaying: isPlaying
+        });
+        
+        // Only pause if audio is currently playing and not already paused
+        if (!audioElement.paused && !audioElement.ended) {
+          audioElement.pause();
+          setIsPlaying(false);
+          console.log('Audio paused successfully');
+        } else {
+          // Audio is already paused, just sync our state
+          console.log('Audio already paused, syncing state');
+          setIsPlaying(false);
+        }
+        
+        // Keep the audioElement reference so we can resume later
+        // Don't set it to null like before
+        
       } catch (pauseError) {
         console.error('Pause error:', pauseError);
         setIsPlaying(false);
+        // Only set to null if there's an actual error
         setAudioElement(null);
       }
+    } else {
+      // No audio element but somehow playing state is true
+      console.log('No audio element found, resetting playing state');
+      setIsPlaying(false);
     }
   };
   const stopAudio = () => {
@@ -686,6 +724,77 @@ const TextToSpeech = () => {
       setError(errorMessage);
     }
   };
+  // Utility function to sync state with actual audio element state
+  const syncAudioState = () => {
+    if (audioElement) {
+      const actuallyPlaying = !audioElement.paused && !audioElement.ended;
+      console.log('Syncing audio state:', {
+        actuallyPlaying,
+        currentIsPlaying: isPlaying,
+        paused: audioElement.paused,
+        ended: audioElement.ended,
+        currentTime: audioElement.currentTime,
+        duration: audioElement.duration
+      });
+      
+      if (actuallyPlaying !== isPlaying) {
+        console.log(`State mismatch detected. Setting isPlaying to ${actuallyPlaying}`);
+        setIsPlaying(actuallyPlaying);
+      }
+      
+      // If audio has ended, clean up
+      if (audioElement.ended && (isPlaying || audioElement)) {
+        console.log('Audio ended, cleaning up');
+        setIsPlaying(false);
+        setAudioElement(null);
+      }
+    } else if (isPlaying) {
+      // No audio element but state says we're playing - this shouldn't happen
+      console.log('No audio element but state shows playing, fixing state');
+      setIsPlaying(false);
+    }
+  };
+
+  // Effect to sync audio state periodically and handle edge cases
+  useEffect(() => {
+    if (!audioElement) return;
+    
+    const interval = setInterval(() => {
+      syncAudioState();
+    }, 500); // Check every 500ms (reduced from 100ms for better performance)
+
+    // Also add event listeners for immediate state changes
+    const handlePlay = () => {
+      console.log('Audio play event');
+      setIsPlaying(true);
+    };
+    
+    const handlePause = () => {
+      console.log('Audio pause event');
+      setIsPlaying(false);
+    };
+    
+    const handleEnded = () => {
+      console.log('Audio ended event');
+      setIsPlaying(false);
+      setAudioElement(null);
+    };
+    
+    if (audioElement) {
+      audioElement.addEventListener('play', handlePlay);
+      audioElement.addEventListener('pause', handlePause);
+      audioElement.addEventListener('ended', handleEnded);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (audioElement) {
+        audioElement.removeEventListener('play', handlePlay);
+        audioElement.removeEventListener('pause', handlePause);
+        audioElement.removeEventListener('ended', handleEnded);
+      }
+    };
+  }, [audioElement]);
 
   return (
     <Card className="neo-card neon-border animate-slide-up">
@@ -856,13 +965,14 @@ const TextToSpeech = () => {
                   variant="outline"
                   size="sm"
                   className="neon-border-purple hover:bg-neon-purple/10"
+                  disabled={!audioUrl}
                 >
                   {isPlaying ? (
                     <Pause size={16} className="mr-2" />
                   ) : (
                     <Play size={16} className="mr-2" />
                   )}
-                  {isPlaying ? "Pause" : "Play"}
+                  {isPlaying ? "Pause" : audioElement && audioElement.paused ? "Resume" : "Play"}
                 </Button>
                 
                 {audioElement && (
