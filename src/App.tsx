@@ -8,9 +8,11 @@ function getSubdomain() {
   
   const hostname = window.location.hostname;
   
-  // For local development
+  // For local development, check URL parameters to simulate subdomains
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return '';
+    const params = new URLSearchParams(window.location.search);
+    const subdomain = params.get('subdomain');
+    return subdomain || '';
   }
   
   // For production with custom domain

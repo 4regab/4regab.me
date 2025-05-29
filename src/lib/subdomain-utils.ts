@@ -26,9 +26,11 @@ export function getSubdomain() {
   
   const hostname = window.location.hostname;
   
-  // For local development
+  // For local development, check URL parameters to simulate subdomains
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return '';
+    const params = new URLSearchParams(window.location.search);
+    const subdomain = params.get('subdomain');
+    return subdomain || '';
   }
   
   // For production with custom domain
@@ -71,6 +73,16 @@ export function buildSubdomainUrl(subdomain: string, path: string = '/') {
 }
 
 export function navigateToSubdomain(subdomain: string, path: string = '/') {
+  const baseUrl = getBaseUrl();
+  
+  // For local development, use query parameters to simulate subdomains
+  if (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
+    const url = `${baseUrl}${path}?subdomain=${subdomain}`;
+    window.location.href = url;
+    return;
+  }
+  
+  // For production, use the existing logic
   const url = buildSubdomainUrl(subdomain, path);
   window.location.href = url;
 }

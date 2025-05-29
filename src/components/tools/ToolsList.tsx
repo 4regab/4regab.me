@@ -1,7 +1,8 @@
 import { ArrowRight, Languages, Volume2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildSubdomainUrl } from "@/lib/subdomain-utils";
+import { buildSubdomainUrl, getSubdomain } from "@/lib/subdomain-utils";
+import { useNavigate } from "react-router-dom";
 
 interface ToolItemProps {
   title: string;
@@ -10,14 +11,22 @@ interface ToolItemProps {
   href: string;
   status: "available" | "coming-soon";
   features?: string[];
-  isExternal?: boolean;
+  internalRoute?: string;
 }
 
-const ToolItem = ({ title, description, icon, href, status, features, isExternal }: ToolItemProps) => {
+const ToolItem = ({ title, description, icon, href, status, features, internalRoute }: ToolItemProps) => {
   const isAvailable = status === "available";
+  const navigate = useNavigate();
+  const currentSubdomain = getSubdomain();
   
   const handleClick = () => {
-    if (isAvailable && isExternal) {
+    if (!isAvailable) return;
+    
+    // If we're on the tools subdomain and there's an internal route, use React Router navigation
+    if (currentSubdomain === 'tools' && internalRoute) {
+      navigate(internalRoute);
+    } else {
+      // Otherwise, use external navigation (for when not on tools subdomain)
       window.open(href, '_blank', 'noopener,noreferrer');
     }
   };
@@ -80,8 +89,8 @@ const ToolsList = () => {
       description: "Translate English text to Tagalog using advanced AI powered by Gemini. Designed specifically for accurate and natural Filipino translations.",
       icon: <Languages size={24} />,
       href: buildSubdomainUrl('translator'),
+      internalRoute: "/translator",
       status: "available",
-      isExternal: true,
       features: [
         "English to Tagalog translation",
         "Context-aware translations",
@@ -94,8 +103,8 @@ const ToolsList = () => {
       description: "Convert text to natural-sounding speech using Gemini AI with multiple voice options and high-quality audio generation.",
       icon: <Volume2 size={24} />,
       href: buildSubdomainUrl('tts'),
+      internalRoute: "/text-to-speech",
       status: "available",
-      isExternal: true,
       features: [
         "30+ voice options",
         "High-quality audio generation",
