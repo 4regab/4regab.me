@@ -1,27 +1,40 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
+import MainApp from "./MainApp";
+import ToolsApp from "./ToolsApp";
+import TranslatorApp from "./TranslatorApp";
+import TTSApp from "./TTSApp";
 
-const queryClient = new QueryClient();
+function getSubdomain() {
+  if (typeof window === 'undefined') return '';
+  
+  const hostname = window.location.hostname;
+  
+  // For local development
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return '';
+  }
+  
+  // For production with custom domain
+  const parts = hostname.split('.');
+  if (parts.length > 2) {
+    return parts[0];
+  }
+  
+  return '';
+}
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  const subdomain = getSubdomain();
+  
+  switch (subdomain) {
+    case 'tools':
+      return <ToolsApp />;
+    case 'translator':
+      return <TranslatorApp />;
+    case 'tts':
+      return <TTSApp />;
+    default:
+      return <MainApp />;
+  }
+};
 
 export default App;

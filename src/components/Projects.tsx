@@ -4,15 +4,15 @@ const Projects = () => {
   const [activeFilter, setActiveFilter] = useState("all");
   const projects = [{
     title: "DeepTerm",
-    description: "Boost your productivity with our Pomodoro and Notes tool. Focus better and organize your thoughts in one place.",
-    image: "/3d5f8cb1-4735-4bf4-b71b-9166a7f2ff49.png",
+    description: "Our AI study tools helps you learn efficiently, create custom quizzes, extract organized notes, track progress, and maintain focus with our Pomodoro timer — all completely free.",
+    image: "/Screenshot 2025-05-29 164114.png",
     tags: ["Productivity", "Pomodoro", "Notes"],
     category: "productivity",
     link: "https://deepterm.tech"
   }, {
     title: "QuillBro",
-    description: "Helps you write better papers, create study materials, and improve your academic performance with powerful AI tools.",
-    image: "/62447950-f802-40ac-baef-c66cf9625ebe.png",
+    description: "Helps you write better papers, QuillBro helps you write better papers, create study materials, and improve your academic performance with powerful AI tools.",
+    image: "/quillbro.png",
     tags: ["Education", "Writing", "AI Tools"],
     category: "education",
     link: "https://quillbro.live"
