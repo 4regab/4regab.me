@@ -17,22 +17,33 @@ const Translator = () => {
   const [isCopied, setIsCopied] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showApiDialog, setShowApiDialog] = useState(false);
-
   // Load API key from localStorage on component mount
   useEffect(() => {
-    const savedApiKey = localStorage.getItem('gemini-api-key');
-    if (savedApiKey) {
-      setApiKey(savedApiKey);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const savedApiKey = localStorage.getItem('gemini-api-key');
+        if (savedApiKey) {
+          setApiKey(savedApiKey);
+        }
+      }
+    } catch (error) {
+      console.warn('localStorage access blocked:', error);
     }
   }, []);
 
   // Save API key to localStorage whenever it changes
   const handleApiKeyChange = (newApiKey: string) => {
     setApiKey(newApiKey);
-    if (newApiKey.trim()) {
-      localStorage.setItem('gemini-api-key', newApiKey);
-    } else {
-      localStorage.removeItem('gemini-api-key');
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        if (newApiKey.trim()) {
+          localStorage.setItem('gemini-api-key', newApiKey);
+        } else {
+          localStorage.removeItem('gemini-api-key');
+        }
+      }
+    } catch (error) {
+      console.warn('localStorage access blocked:', error);
     }
   };
 
@@ -205,71 +216,73 @@ Before finalizing the translation, review it against these criteria:
                 API Settings
               </Button>
             </DialogTrigger>
-            <DialogContent className="neo-card neon-border">
-              <DialogHeader>
+            <DialogContent className="neo-card neon-border">              <DialogHeader>
                 <DialogTitle className="font-display">Gemini API Configuration</DialogTitle>
                 <DialogDescription>
                   Enter your Google Gemini API key to use the translator
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="api-key">API Key</Label>
-                  <div className="relative">                    <Input
-                      id="api-key"
-                      type={showApiKey ? "text" : "password"}
-                      value={apiKey}
-                      onChange={(e) => handleApiKeyChange(e.target.value)}
-                      placeholder="Enter your Gemini API key"
-                      className="pr-10"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowApiKey(!showApiKey)}
+              <form onSubmit={(e) => { e.preventDefault(); setShowApiDialog(false); }}>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="api-key">API Key</Label>
+                    <div className="relative">                    <Input
+                        id="api-key"
+                        type={showApiKey ? "text" : "password"}
+                        value={apiKey}
+                        onChange={(e) => handleApiKeyChange(e.target.value)}
+                        placeholder="Enter your Gemini API key"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                      >
+                        {showApiKey ? (
+                          <EyeOff size={16} className="text-muted-foreground" />
+                        ) : (
+                          <Eye size={16} className="text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <Alert>
+                    <AlertDescription>
+                      <strong>Quick Tutorial:</strong>
+                      <ol className="list-decimal list-inside mt-2 space-y-1 text-sm">
+                        <li>Go to <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-neon-blue hover:underline">Google AI Studio</a></li>
+                        <li>Sign in with your Google account</li>
+                        <li>Click "Create API Key"</li>
+                        <li>Copy the generated key and paste it above</li>
+                        <li>Your key is stored locally and never sent to our servers</li>
+                      </ol>
+                    </AlertDescription>                </Alert>
+                  
+                  <div className="flex gap-2">
+                    <Button 
+                      type="submit"
+                      className="flex-1 bg-neon-blue/20 neon-border hover:bg-neon-blue/30"
+                      disabled={!apiKey.trim()}
                     >
-                      {showApiKey ? (
-                        <EyeOff size={16} className="text-muted-foreground" />
-                      ) : (
-                        <Eye size={16} className="text-muted-foreground" />
-                      )}
+                      Save Configuration
                     </Button>
+                    {apiKey.trim() && (
+                      <Button 
+                        type="button"
+                        onClick={() => handleApiKeyChange('')}
+                        variant="outline"
+                        className="neon-border text-red-400 hover:bg-red-500/10"
+                      >
+                        Clear
+                      </Button>
+                    )}
                   </div>
                 </div>
-                
-                <Alert>
-                  <AlertDescription>
-                    <strong>Quick Tutorial:</strong>
-                    <ol className="list-decimal list-inside mt-2 space-y-1 text-sm">
-                      <li>Go to <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-neon-blue hover:underline">Google AI Studio</a></li>
-                      <li>Sign in with your Google account</li>
-                      <li>Click "Create API Key"</li>
-                      <li>Copy the generated key and paste it above</li>
-                      <li>Your key is stored locally and never sent to our servers</li>
-                    </ol>
-                  </AlertDescription>                </Alert>
-                
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={() => setShowApiDialog(false)} 
-                    className="flex-1 bg-neon-blue/20 neon-border hover:bg-neon-blue/30"
-                    disabled={!apiKey.trim()}
-                  >
-                    Save Configuration
-                  </Button>
-                  {apiKey.trim() && (
-                    <Button 
-                      onClick={() => handleApiKeyChange('')}
-                      variant="outline"
-                      className="neon-border text-red-400 hover:bg-red-500/10"
-                    >
-                      Clear
-                    </Button>
-                  )}
-                </div>
-              </div>
+              </form>
             </DialogContent>
           </Dialog>
         </div>
