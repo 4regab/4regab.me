@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocation, Link, useNavigate } from "react-router-dom";
+import { navigateToSubdomain } from "@/lib/subdomain-utils";
 
 // Helper function to get current subdomain
 function getCurrentSubdomain() {
@@ -81,18 +82,10 @@ const Navbar = () => {
       }, 100);
     }
     setIsOpen(false); // Close mobile menu if open
-  };
-  const handleToolsClick = (e: React.MouseEvent) => {
+  };  const handleToolsClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    const currentSubdomain = getCurrentSubdomain();
-    
-    // If we're already on the main domain, use regular navigation
-    if (!currentSubdomain) {
-      navigate('/tools');
-    } else {
-      // Navigate to main domain tools page
-      navigateToMainDomain('/tools');
-    }
+    // Always navigate to the tools subdomain
+    navigateToSubdomain('tools');
     setIsOpen(false); // Close mobile menu if open
   };
 
@@ -181,7 +174,7 @@ const Navbar = () => {
             if (item.name === 'Home') {
               isActive = !currentSubdomain && location.pathname === '/';
             } else if (item.name === 'Tools') {
-              isActive = location.pathname === '/tools';
+              isActive = currentSubdomain === 'tools';
             } else if (item.name === 'Projects') {
               isActive = !currentSubdomain && location.pathname === '/' && activeItem === 'projects';
             }
@@ -233,7 +226,7 @@ const Navbar = () => {
             if (item.name === 'Home') {
               isActive = !currentSubdomain && location.pathname === '/';
             } else if (item.name === 'Tools') {
-              isActive = location.pathname === '/tools';
+              isActive = currentSubdomain === 'tools';
             } else if (item.name === 'Projects') {
               isActive = !currentSubdomain && location.pathname === '/' && activeItem === 'projects';
             }
