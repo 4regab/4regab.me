@@ -146,10 +146,8 @@ const Navbar = () => {
       }
     }
   }, [location.hash, location.pathname]);
-
   const menuItems = [
     { name: "Home", href: "/", handler: handleHomeClick },
-    { name: "Projects", href: "/#projects", handler: handleProjectsClick },
     { name: "Tools", href: "/tools", handler: handleToolsClick },
   ];
 
@@ -174,9 +172,7 @@ const Navbar = () => {
             if (item.name === 'Home') {
               isActive = !currentSubdomain && location.pathname === '/';
             } else if (item.name === 'Tools') {
-              isActive = currentSubdomain === 'tools';
-            } else if (item.name === 'Projects') {
-              isActive = !currentSubdomain && location.pathname === '/' && activeItem === 'projects';
+              isActive = currentSubdomain === 'tools' || location.pathname.startsWith('/tools');
             }
             
             return (
@@ -191,7 +187,7 @@ const Navbar = () => {
                   "after:content-[''] after:absolute after:w-full after:scale-x-0 after:h-0.5 after:bottom-0 after:left-0 after:bg-neon-blue after:origin-bottom-right after:transition-transform after:duration-300 hover:after:scale-x-100 hover:after:origin-bottom-left"
                 )}
               >
-                {item.name}
+                {item.name === 'Tools' && (currentSubdomain === 'tools' || location.pathname.startsWith('/tools')) ? 'Tools' : item.name}
                 {isActive && (
                   <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-neon-blue animate-pulse"></span>
                 )}
@@ -226,9 +222,7 @@ const Navbar = () => {
             if (item.name === 'Home') {
               isActive = !currentSubdomain && location.pathname === '/';
             } else if (item.name === 'Tools') {
-              isActive = currentSubdomain === 'tools';
-            } else if (item.name === 'Projects') {
-              isActive = !currentSubdomain && location.pathname === '/' && activeItem === 'projects';
+              isActive = currentSubdomain === 'tools' || location.pathname.startsWith('/tools');
             }
             
             return (

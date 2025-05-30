@@ -1,4 +1,4 @@
-import { ArrowRight, Languages, Volume2, Wrench } from "lucide-react";
+import { ArrowRight, Languages, Volume2, Wrench, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -97,7 +97,19 @@ const ToolItem = ({ title, description, icon, href, status, features, internalRo
   );
 };
 
-const ToolsList = () => {  const tools: ToolItemProps[] = [
+const ToolsList = () => {  const tools: ToolItemProps[] = [    {
+      title: "AI Chat ",
+      description: "Submit any academic or task-based input and choose from specialized AI agents for accurate, well-formatted outputs.",
+      icon: <Brain size={24} />,
+      href: buildToolUrl('chat'),
+      internalRoute: "/chat",
+      status: "available",
+      features: [
+        "8 specialized AI agents",
+        "File upload support and Export to PDF/DOCX",
+        "Academic and professional assistance",
+      ]
+    },
     {
       title: "AI Translator",
       description: "Translate English text to Tagalog using advanced AI powered by Gemini. Designed specifically for accurate and natural Filipino translations.",
@@ -133,12 +145,7 @@ const ToolsList = () => {  const tools: ToolItemProps[] = [
       icon: <Wrench size={24} />,
       href: "#",
       status: "coming-soon",
-      features: [
-        "Text summarization",
-        "Image analysis",
-        "Code generation", 
-        "And much more..."
-      ]
+
     }
   ];
 

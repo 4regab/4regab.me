@@ -2,6 +2,7 @@ import MainApp from "./MainApp";
 import ToolsApp from "./ToolsApp";
 import TranslatorApp from "./TranslatorApp";
 import TTSApp from "./TTSApp";
+import HelperApp from "./HelperApp";
 
 function getSubdomain() {
   if (typeof window === 'undefined') return '';
@@ -26,14 +27,16 @@ function getSubdomain() {
 
 const App = () => {
   const subdomain = getSubdomain();
-  
-  switch (subdomain) {
+    switch (subdomain) {
     case 'tools':
       return <ToolsApp />;
     case 'translator':
       return <TranslatorApp />;
     case 'tts':
-      return <TTSApp />;
+      return <TTSApp />;    case 'chat':
+      return <HelperApp />;
+    case 'helper':
+      return <HelperApp />;
     default:
       return <MainApp />;
   }
