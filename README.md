@@ -259,26 +259,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 - **Documentation**: Check this README and inline code comments
-- **Issues**: Report bugs via [GitHub Issues](https://github.com/yourusername/4regab/issues)
-- **Discussions**: Join [GitHub Discussions](https://github.com/yourusername/4regab/discussions)
-- **Email**: Contact via the website contact form
-
-## 🗺️ Roadmap
-
-- [ ] **Real-time Collaboration**: Multi-user chat sessions
-- [ ] **API Marketplace**: Support for more AI providers  
-- [ ] **Plugin System**: Community-developed extensions
-- [ ] **Mobile Apps**: Native iOS/Android applications
-- [ ] **Voice Interface**: Speech-to-text input
-- [ ] **Advanced Analytics**: Usage insights and metrics
-
+- **Issues**: Report bugs via [GitHub Issues](https://github.com/4regab/4regab/issues)
 ---
 
 <div align="center">
 
 **⭐ Star this repository if you found it helpful!**
 
-[![GitHub stars](https://img.shields.io/github/stars/yourusername/4regab?style=social)](https://github.com/yourusername/4regab/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/yourusername/4regab?style=social)](https://github.com/yourusername/4regab/network/members)
+[![GitHub stars](https://img.shields.io/github/stars/4regab/4regab?style=social)](https://github.com/4regab/4regab/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/4regab/4regab?style=social)](https://github.com/4regab/4regab/network/members)
 
 </div>
