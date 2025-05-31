@@ -218,12 +218,11 @@ function cleanResponseFormatting(response: string): string {
   
   // Remove markdown headers
   cleaned = cleaned.replace(/^#{1,6}\s*/gm, '');
-  
-  // Remove markdown links but keep the text
+    // Remove markdown links but keep the text
   cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
   
-  // Remove HTML tags if any
-  cleaned = cleaned.replace(/<[^>]*>/g, '');
+  // Remove HTML tags if any, but preserve image tags
+  cleaned = cleaned.replace(/<(?!\/?img\b)[^>]*>/g, '');
   
   // Remove any remaining special formatting characters
   cleaned = cleaned.replace(/[▊│]/g, ''); // Remove cursor and special chars
@@ -714,18 +713,14 @@ const Helper = () => {
           cleanedHistory.shift();
         }
       }      // Debug: log conversation history state
-      console.log('Conversation history:', {
-        cleanedHistory: cleanedHistory.length,
-        firstRole: cleanedHistory.length > 0 ? cleanedHistory[0].role : 'none'
-      });
 
       // Use the enhanced prompt as current message
       const currentPrompt = messageContent || `Please analyze the ${filesForGemini.length > 0 ? 'uploaded files' : 'previous context'} and provide insights.`;
         // Choose system prompt based on reasoning mode
       const systemPrompt = isReasoningMode ? REASONING_MODE_SYSTEM_PROMPT : selectedAgent.systemPrompt;
-      
-      // Use the new conversation history method if there's history, otherwise fall back to the original method
-      const response = cleanedHistory.length > 0 
+        // Use the new conversation history method if there's history, otherwise fall back to the original method
+      // IMPORTANT: Image generation models don't support conversation history, so always use generateContent for them
+      const response = (cleanedHistory.length > 0 && !selectedModel.supportsImageGeneration) 
         ? await geminiService.generateContentWithHistory(
             currentPrompt,
             systemPrompt,
@@ -737,7 +732,8 @@ const Helper = () => {
         : await geminiService.generateContent(
             currentPrompt,
             systemPrompt,
-            filesForGemini.length > 0 ? filesForGemini : undefined,            selectedModel,
+            filesForGemini.length > 0 ? filesForGemini : undefined,
+            selectedModel,
             filesForThisMessage.length > 0 ? filesForThisMessage : undefined // Pass raw files for OpenRouter
           );
 
@@ -960,9 +956,9 @@ const Helper = () => {
         const currentPrompt = lastUserMessage.content || `Please analyze the ${filesForGemini.length > 0 ? 'uploaded files' : 'previous context'} and provide insights.`;
         const systemPrompt = isReasoningMode ? REASONING_MODE_SYSTEM_PROMPT : (lastUserMessage.agent || selectedAgent).systemPrompt;
         const modelToUse = lastUserMessage.model || selectedModel;
-        
-        // Generate response
-        const response = cleanedHistory.length > 0 
+          // Generate response
+        // IMPORTANT: Image generation models don't support conversation history, so always use generateContent for them
+        const response = (cleanedHistory.length > 0 && !modelToUse.supportsImageGeneration) 
           ? await geminiService.generateContentWithHistory(
               currentPrompt,
               systemPrompt,
@@ -1245,20 +1241,27 @@ const Helper = () => {
         variant: "destructive"
       });
     }
-  }, [messages, toast, selectedAgent, selectedModel]);
-
-  // Helper function to parse content and extract images
+  }, [messages, toast, selectedAgent, selectedModel]);  // Helper function to parse content and extract images
   function parseContentWithImages(content: string): { text: string; images: string[] } {
     const images: string[] = [];
     let text = content;
     
     // Find markdown image patterns: ![alt text](data:image/...)
-    const imageRegex = /!\[([^\]]*)\]\((data:image\/[^;]+;base64,[^)]+)\)/g;
+    const markdownImageRegex = /!\[([^\]]*)\]\((data:image\/[^;]+;base64,[^)]+)\)/g;
     let match;
     
-    while ((match = imageRegex.exec(content)) !== null) {
+    while ((match = markdownImageRegex.exec(content)) !== null) {
       images.push(match[2]); // Extract the data URL
       // Replace the markdown image with a placeholder
+      text = text.replace(match[0], `[Image ${images.length}]`);
+    }
+    
+    // Find HTML image patterns: <img src="data:image/..." ... />
+    const htmlImageRegex = /<img[^>]+src="(data:image\/[^;]+;base64,[^"]+)"[^>]*\/?>/g;
+    
+    while ((match = htmlImageRegex.exec(content)) !== null) {
+      images.push(match[1]); // Extract the data URL
+      // Replace the HTML image with a placeholder
       text = text.replace(match[0], `[Image ${images.length}]`);
     }
     

@@ -34,14 +34,14 @@ export const GEMINI_MODELS: GeminiModel[] = [
     supportsGrounding: true,
     supportsVision: true,
     provider: 'google',
-  },
-  {
+  },  {
     id: 'gemini-2.0-flash-lite',
     name: 'Gemini 2.0 Flash-Lite',
     description: 'Lightweight model optimized for speed and efficiency',
     modelName: 'gemini-2.0-flash-lite',
     isDefault: false,
-    supportsGrounding: true,    supportsVision: true,
+    supportsGrounding: false,
+    supportsVision: true,
     provider: 'google',
   },
   
@@ -253,16 +253,19 @@ export function getModelConfig(model: GeminiModel) {
         }
       ];
     }
-  }
-
-  // Configure image generation for supported models
+  }  // Configure image generation for supported models
   if (model.supportsImageGeneration) {
+    // Note: responseModalities is set at the request level in gemini-service.ts
+    // to avoid conflicts with the config structure
     config.generationConfig = {
-      ...config.generationConfig,
-      responseModalities: ["TEXT", "IMAGE"]
+      ...config.generationConfig
     };
   }
-
-  console.log(`Model ${model.name} (${model.modelName}) configuration:`, JSON.stringify(config, null, 2));
+  console.log(`Model ${model.name} (${model.modelName}) configuration:`, {
+    ...config,
+    hasGrounding: model.supportsGrounding,
+    hasTools: !!config.tools,
+    toolsDetail: config.tools
+  });
   return config;
 }
