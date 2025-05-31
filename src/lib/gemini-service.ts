@@ -256,7 +256,8 @@ class GeminiService {
     systemPrompt: string,
     files?: GeminiFile[],
     model?: GeminiModel,
-    rawFiles?: File[]
+    rawFiles?: File[],
+    enableThinking?: boolean
   ): Promise<string> {
     this.ensureInitialized();
     
@@ -313,8 +314,7 @@ class GeminiService {
       contents.push({ text: combinedPrompt });      // Use the new GoogleGenAI client API
       if (!this.client) {
         throw new Error('GoogleGenAI client not initialized');
-      }
-        const modelConfig = getModelConfig(this.currentModel);      // Prepare the request configuration
+      }        const modelConfig = getModelConfig(this.currentModel);      // Prepare the request configuration
       const requestConfig: any = {
         model: this.currentModel.modelName,
         contents: [{ parts: contents }],
@@ -328,16 +328,25 @@ class GeminiService {
           // For image generation models, specify response modalities
           ...(this.currentModel.supportsImageGeneration && {
             responseModalities: ["TEXT", "IMAGE"]
+          }),
+          // Add thinking configuration if enabled and supported
+          ...(enableThinking && this.supportsThinking(this.currentModel) && {
+            thinkingConfig: {
+              includeThoughts: true
+            }
           })
         }
       };      console.log('Request configuration:', {
         modelName: this.currentModel.modelName,
         supportsImageGeneration: this.currentModel.supportsImageGeneration,
         supportsGrounding: this.currentModel.supportsGrounding,
+        supportsThinking: this.supportsThinking(this.currentModel),
+        enableThinking: enableThinking,
         hasTools: !!requestConfig.config.tools,
         tools: requestConfig.config.tools,
         hasSystemInstruction: !!requestConfig.config.systemInstruction,
-        hasResponseModalities: !!requestConfig.config.responseModalities,        responseModalities: requestConfig.config.responseModalities
+        hasResponseModalities: !!requestConfig.config.responseModalities,
+        hasThinkingConfig: !!requestConfig.config.thinkingConfig,        responseModalities: requestConfig.config.responseModalities
       });// Use different API methods based on model capabilities
       let response;      if (this.currentModel.supportsImageGeneration) {
         // For image generation models, use the requestConfig that already has correct responseModalities
@@ -386,8 +395,30 @@ class GeminiService {
           console.log('First candidate:', response.candidates[0]);
           console.log('First candidate keys:', Object.keys(response.candidates[0]));
         }
-      }
-        console.log('=== END DEBUGGING ===');
+      }        console.log('=== END DEBUGGING ===');
+        
+        // Check for thinking mode first
+        if (enableThinking && this.supportsThinking(this.currentModel)) {
+          console.log('🧠 THINKING MODE ENABLED - Processing thinking response');
+          const thinkingResult = this.processThinkingResponse(response, enableThinking);
+          
+          if (thinkingResult.thoughts || thinkingResult.answer) {
+            // Format thinking response with special markers for the Helper component to parse
+            const formattedResponse = thinkingResult.thoughts 
+              ? `<thinking>\n${thinkingResult.thoughts}\n</thinking>\n\n${thinkingResult.answer}`
+              : thinkingResult.answer;
+            
+            console.log('🧠 Returning thinking response:', {
+              hasThoughts: !!thinkingResult.thoughts,
+              thoughtsLength: thinkingResult.thoughts.length,
+              answerLength: thinkingResult.answer.length,
+              formattedLength: formattedResponse.length
+            });
+            
+            return formattedResponse;
+          }
+        }
+        
         // Handle different response types based on model capabilities
       if (this.currentModel.supportsImageGeneration) {
         console.log('🖼️ PROCESSING IMAGE GENERATION RESPONSE');
@@ -602,7 +633,6 @@ class GeminiService {
     
     return supportedExtensions.some(ext => fileName.endsWith(ext));
   }
-
   /**
    * Generate content with conversation history
    */
@@ -612,7 +642,8 @@ class GeminiService {
     conversationHistory: Content[],
     files?: GeminiFile[],
     model?: GeminiModel,
-    rawFiles?: File[]
+    rawFiles?: File[],
+    enableThinking?: boolean
   ): Promise<string> {
     this.ensureInitialized();
     
@@ -701,24 +732,31 @@ class GeminiService {
           // For image generation models, specify response modalities
           ...(this.currentModel.supportsImageGeneration && {
             responseModalities: ["TEXT", "IMAGE"]
+          }),
+          // Add thinking configuration if enabled and supported
+          ...(enableThinking && this.supportsThinking(this.currentModel) && {
+            thinkingConfig: {
+              includeThoughts: true
+            }
           })
         }
       };      console.log('Request configuration for history:', {
         modelName: this.currentModel.modelName,
         supportsImageGeneration: this.currentModel.supportsImageGeneration,
         supportsGrounding: this.currentModel.supportsGrounding,
+        supportsThinking: this.supportsThinking(this.currentModel),
+        enableThinking: enableThinking,
         hasTools: !!requestConfig.config.tools,
         tools: requestConfig.config.tools,
         hasSystemInstruction: !!requestConfig.config.systemInstruction,
         hasResponseModalities: !!requestConfig.config.responseModalities,
+        hasThinkingConfig: !!requestConfig.config.thinkingConfig,
         responseModalities: requestConfig.config.responseModalities,
         contentsLength: contents.length
       });
 
       // Use generateContent with the new API
-      const response = await this.client.models.generateContent(requestConfig);
-
-      console.log('=== DEBUGGING HISTORY IMAGE GENERATION RESPONSE ===');
+      const response = await this.client.models.generateContent(requestConfig);      console.log('=== DEBUGGING HISTORY IMAGE GENERATION RESPONSE ===');
       console.log('Full response object:', response);
       console.log('Response constructor:', response.constructor.name);
       console.log('Response keys:', Object.keys(response));
@@ -726,6 +764,28 @@ class GeminiService {
       // Try to access response.text directly first
       console.log('Direct response.text:', response.text);
       console.log('Response.text type:', typeof response.text);
+      
+      // Check for thinking mode first
+      if (enableThinking && this.supportsThinking(this.currentModel)) {
+        console.log('🧠 THINKING MODE ENABLED FOR HISTORY - Processing thinking response');
+        const thinkingResult = this.processThinkingResponse(response, enableThinking);
+        
+        if (thinkingResult.thoughts || thinkingResult.answer) {
+          // Format thinking response with special markers for the Helper component to parse
+          const formattedResponse = thinkingResult.thoughts 
+            ? `<thinking>\n${thinkingResult.thoughts}\n</thinking>\n\n${thinkingResult.answer}`
+            : thinkingResult.answer;
+          
+          console.log('🧠 Returning thinking response for history:', {
+            hasThoughts: !!thinkingResult.thoughts,
+            thoughtsLength: thinkingResult.thoughts.length,
+            answerLength: thinkingResult.answer.length,
+            formattedLength: formattedResponse.length
+          });
+          
+          return formattedResponse;
+        }
+      }
       
       // Handle both text and image responses for models like Gemini 2.0 Flash Image Generation
       const candidates = response.candidates;
@@ -1067,6 +1127,60 @@ class GeminiService {
     }
 
     return textContent || 'No content received.';
+  }
+
+  /**
+   * Check if the current model supports thinking mode
+   */
+  private supportsThinking(model: GeminiModel): boolean {
+    // Only Gemini 2.5 series models support thinking
+    return model.provider === 'google' && 
+           (model.modelName.includes('2.5') || model.modelName.includes('gemini-2.5'));
+  }
+
+  /**
+   * Process response with thinking parts
+   */
+  private processThinkingResponse(response: any, enableThinking: boolean): { thoughts: string; answer: string } {
+    if (!enableThinking || !response.candidates || response.candidates.length === 0) {
+      return { thoughts: '', answer: '' };
+    }
+
+    const candidate = response.candidates[0];
+    if (!candidate.content || !candidate.content.parts) {
+      return { thoughts: '', answer: '' };
+    }
+
+    let thoughts = '';
+    let answer = '';
+
+    console.log('🧠 PROCESSING THINKING RESPONSE');
+    console.log('Parts count:', candidate.content.parts.length);
+
+    for (const part of candidate.content.parts) {
+      if (!part.text) continue;
+      
+      console.log('Part keys:', Object.keys(part));
+      console.log('Has thought field:', 'thought' in part);
+      console.log('Thought value:', (part as any).thought);
+      
+      if ((part as any).thought === true) {
+        console.log('📝 Adding to thoughts:', part.text.substring(0, 100) + '...');
+        thoughts += part.text;
+      } else {
+        console.log('💬 Adding to answer:', part.text.substring(0, 100) + '...');
+        answer += part.text;
+      }
+    }
+
+    console.log('🧠 Final thinking result:', {
+      thoughtsLength: thoughts.length,
+      answerLength: answer.length,
+      hasThoughts: thoughts.length > 0,
+      hasAnswer: answer.length > 0
+    });
+
+    return { thoughts: thoughts.trim(), answer: answer.trim() };
   }
 }
 

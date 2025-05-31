@@ -15,6 +15,8 @@ import { GEMINI_MODELS, getDefaultModel, getModelById, getModelConfig } from '@/
 import { HELPER_AGENTS, getAgentById, getAgentIcon } from '@/lib/helper-agents';
 import geminiService from '@/lib/gemini-service';
 import { ExportService } from '@/lib/export-service';
+import ThinkingAnimation from '@/components/ui/thinking-animation';
+import MessageContent from '@/components/ui/message-content';
 // import { ragService, type DocumentChunk, type RAGContext } from '@/lib/rag-service'; // Removed RAG
 import { type AgentPrompt, type GeminiModel, type GeminiFile, type HelperTask, type ExportOptions } from '@/types/helper';
 import { cn } from '@/lib/utils';
@@ -31,9 +33,8 @@ interface ChatMessage {
   geminiResponseFiles?: GeminiFile[]; // Files returned by Gemini
   rawFiles?: File[]; // Raw files for OpenRouter compatibility
   isLoading?: boolean;
-  error?: string;
-  // Reasoning mode fields
-  isReasoningMode?: boolean;
+  error?: string;  // Thinking mode fields (updated for official API)
+  isThinkingMode?: boolean;
   thinkingProcess?: string;
   finalAnswer?: string;
   isThinking?: boolean;
@@ -41,11 +42,17 @@ interface ChatMessage {
 
 const LOCAL_STORAGE_CHAT_HISTORY_KEY = 'gemini_helper_chat_history';
 
-// Helper function to parse reasoning mode response (new cleaner format)
-function parseReasoningResponse(response: string): { thinkingProcess: string; finalAnswer: string } {
-  // Look for <thinking> tags
+// Helper function to check if a model supports thinking mode
+function supportsThinking(model: GeminiModel): boolean {
+  return model.provider === 'google' && 
+         (model.modelName.includes('2.5') || model.modelName.includes('gemini-2.5'));
+}
+
+// Helper function to parse thinking mode response (official API format)
+function parseThinkingResponse(response: string): { thinkingProcess: string; finalAnswer: string } {
+  // Look for <thinking> tags from the official API
   const thinkingMatch = response.match(/<thinking>(.*?)<\/thinking>/s);
-    if (thinkingMatch) {
+  if (thinkingMatch) {
     const thinkingProcess = cleanResponseFormatting(thinkingMatch[1].trim());
     // Everything after </thinking> is the final answer
     let finalAnswer = response.replace(/<thinking>.*?<\/thinking>/s, '').trim();
@@ -59,80 +66,7 @@ function parseReasoningResponse(response: string): { thinkingProcess: string; fi
     };
   }
   
-  // Enhanced fallback: Look for explicit "Final answer:" markers first
-  const finalAnswerRegex = /(?:final answer:|conclusion:|in essence,|in summary,)\s*/i;
-  const finalAnswerMatch = response.search(finalAnswerRegex);
-    if (finalAnswerMatch !== -1) {
-    const thinkingProcess = cleanResponseFormatting(response.substring(0, finalAnswerMatch).trim());
-    const finalAnswer = response.substring(finalAnswerMatch).trim();
-    
-    return {
-      thinkingProcess: thinkingProcess || "Let me analyze this question step by step.",
-      finalAnswer: cleanFinalAnswer(finalAnswer)
-    };
-  }
-  
-  // Enhanced fallback: try to identify reasoning patterns more aggressively
-  const lines = response.split('\n');
-  let thinkingSection = '';
-  let answerSection = '';
-  let inThinking = true; // Start in thinking mode
-  let foundReasoningPattern = false;
-  let transitionFound = false;
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    const lowerLine = line.toLowerCase();
-    
-    // Check for transition markers that indicate final answer
-    if (lowerLine.includes('final answer') || lowerLine.includes('conclusion') ||
-        lowerLine.includes('in summary') || lowerLine.includes('therefore, the answer') ||
-        lowerLine.includes('based on this analysis') || lowerLine.includes('so the answer') ||
-        lowerLine.includes('in essence') || (lowerLine.startsWith('*') && i > lines.length * 0.5)) {
-      inThinking = false;
-      transitionFound = true;
-      answerSection += line + '\n';
-      continue;
-    }
-    
-    // More aggressive indicators of reasoning/thinking (only if not already transitioned)
-    if (inThinking && (lowerLine.includes('let me') || lowerLine.includes('first,') || 
-        lowerLine.includes('step 1') || lowerLine.includes('step by step') ||
-        lowerLine.includes('analyzing') || lowerLine.includes('considering') ||
-        lowerLine.includes('to answer this') || lowerLine.includes('breaking down') ||
-        lowerLine.includes('i need to') || lowerLine.includes('let\'s consider') ||
-        lowerLine.match(/^\d+\./) || lowerLine.includes('here\'s a summary'))) {
-      foundReasoningPattern = true;
-    }
-    
-    if (inThinking) {
-      thinkingSection += line + '\n';
-    } else {
-      answerSection += line + '\n';
-    }
-  }
-    // If no clear transition found, split at around 60% mark
-  if (!transitionFound && foundReasoningPattern) {
-    const splitPoint = Math.floor(lines.length * 0.6);
-    thinkingSection = cleanResponseFormatting(lines.slice(0, splitPoint).join('\n'));
-    answerSection = lines.slice(splitPoint).join('\n');
-  }
-  
-  // If no reasoning pattern found, create a basic thinking process
-  if (!foundReasoningPattern || thinkingSection.trim().length < 20) {
-    thinkingSection = cleanResponseFormatting("Let me analyze this question step by step.\n\n" + 
-                     lines.slice(0, Math.max(1, Math.floor(lines.length * 0.4))).join('\n'));
-    answerSection = lines.slice(Math.floor(lines.length * 0.4)).join('\n');
-  }
-    // Only format as reasoning if we found or created thinking content
-  if (thinkingSection.trim()) {
-    return {
-      thinkingProcess: cleanResponseFormatting(thinkingSection.trim()),
-      finalAnswer: cleanFinalAnswer(answerSection.trim()) || cleanFinalAnswer(response)
-    };
-  }
-  
-  // Last fallback: treat entire response as final answer
+  // If no thinking tags found, treat entire response as final answer
   return {
     thinkingProcess: '',
     finalAnswer: cleanFinalAnswer(response)
@@ -191,40 +125,48 @@ function cleanFinalAnswer(answer: string): string {
 }
 
 // Helper function to clean unnecessary asterisks and formatting
+// IMPORTANT: This function should be conservative and NOT damage code content
 function cleanResponseFormatting(response: string): string {
   let cleaned = response;
   
-  // Remove markdown formatting FIRST (before removing all asterisks)
-  cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, '$1'); // Remove bold formatting
-  cleaned = cleaned.replace(/\*([^*]+)\*/g, '$1'); // Remove italic formatting
-  cleaned = cleaned.replace(/~~([^~]+)~~/g, '$1'); // Remove strikethrough
-  cleaned = cleaned.replace(/`([^`]+)`/g, '$1'); // Remove inline code formatting
+  // First, preserve code blocks by temporarily replacing them with placeholders
+  const codeBlocks: string[] = [];
+  const codeBlockPlaceholders: string[] = [];
+  
+  // Preserve markdown code blocks
   cleaned = cleaned.replace(/```[\s\S]*?```/g, (match) => {
-    // Remove code block formatting but keep content
-    return match.replace(/```[^\n]*\n?/g, '').replace(/```/g, '');
+    const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+    codeBlocks.push(match);
+    codeBlockPlaceholders.push(placeholder);
+    return placeholder;
   });
-    // Clean up bullet points - convert to simple dashes (before removing asterisks)
+  
+  // Preserve inline code
+  const inlineCode: string[] = [];
+  const inlineCodePlaceholders: string[] = [];
+  cleaned = cleaned.replace(/`([^`]+)`/g, (match) => {
+    const placeholder = `__INLINE_CODE_${inlineCode.length}__`;
+    inlineCode.push(match);
+    inlineCodePlaceholders.push(placeholder);
+    return placeholder;
+  });
+  
+  // Now apply conservative cleaning to non-code content
+  // Remove only clearly markdown formatting (not code-related symbols)
+  cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, '$1'); // Remove bold formatting
+  cleaned = cleaned.replace(/(?<!\w)\*([^*\n]+)\*(?!\w)/g, '$1'); // Remove italic formatting (word boundaries)
+  cleaned = cleaned.replace(/~~([^~]+)~~/g, '$1'); // Remove strikethrough
+  
+  // Clean up bullet points - convert to simple dashes
   cleaned = cleaned.replace(/^\s*[-*+]\s+/gm, '- ');
   
-  // Remove numbered list formatting
+  // Remove numbered list formatting (but preserve line numbers in code)
   cleaned = cleaned.replace(/^\s*\d+\.\s+/gm, '');
-    // NOW remove any remaining asterisks for completely plain text output
-  cleaned = cleaned.replace(/\*/g, '');
   
-  // Remove any remaining underscore emphasis
-  cleaned = cleaned.replace(/_([^_]+)_/g, '$1');
-  cleaned = cleaned.replace(/__([^_]+)__/g, '$1');    // Remove any emoji-asterisk combinations that might slip through
-  cleaned = cleaned.replace(/[\u{1F600}-\u{1F64F}][\u{1F300}-\u{1F5FF}][\u{1F680}-\u{1F6FF}][\u{1F1E0}-\u{1F1FF}]\s*\*/gu, '');
-  
-  // Remove markdown headers
-  cleaned = cleaned.replace(/^#{1,6}\s*/gm, '');
-    // Remove markdown links but keep the text
+  // Remove markdown links but keep the text
   cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
   
-  // Remove HTML tags if any, but preserve image tags
-  cleaned = cleaned.replace(/<(?!\/?img\b)[^>]*>/g, '');
-  
-  // Remove any remaining special formatting characters
+  // Remove cursor and special formatting characters (but preserve code symbols)
   cleaned = cleaned.replace(/[▊│]/g, ''); // Remove cursor and special chars
   
   // Clean up excessive spacing
@@ -237,73 +179,18 @@ function cleanResponseFormatting(response: string): string {
   // Remove trailing whitespace from lines
   cleaned = cleaned.replace(/[ \t]+$/gm, '');
   
+  // Restore code blocks
+  codeBlockPlaceholders.forEach((placeholder, index) => {
+    cleaned = cleaned.replace(placeholder, codeBlocks[index]);
+  });
+  
+  // Restore inline code
+  inlineCodePlaceholders.forEach((placeholder, index) => {
+    cleaned = cleaned.replace(placeholder, inlineCode[index]);
+  });
+  
   return cleaned.trim();
 }
-
-// Reasoning Mode System Prompt
-const REASONING_MODE_SYSTEM_PROMPT = `You are an expert AI assistant in reasoning mode. You MUST always show your step-by-step thinking process for every response, no matter how simple the question.
-
-Your primary objective is to deliver responses that are not only accurate but also demonstrate a clear, step-by-step reasoning process.
-
-**Core Instructions & Reasoning Framework:**
-
-1.  **Understand the Request:**
-    *   Carefully analyze the user's query to fully grasp the underlying intent and all explicit and implicit requirements.
-    *   If the query is ambiguous or lacks necessary information, identify the ambiguities and request clarification before proceeding. Do not make assumptions.
-
-2.  **Chain-of-Thought Process (Mandatory):**
-    *   For every query, you MUST generate a detailed, step-by-step thought process that leads to your final answer. 
-    *   Clearly articulate each reasoning step. Explain *why* you are taking a particular step and *how* it contributes to the overall solution. 
-    *   Use leading words like "First, I will...", "Next, I need to consider...", "Therefore, based on the previous step...", to structure your thought process. 
-
-3.  **Information Analysis & Synthesis (If Applicable):**
-    *   If the query involves analyzing provided data or documents:
-        *   Identify the key pieces of information relevant to the query.
-        *   Explain how you are interpreting this information.
-        *   Synthesize the information logically to build your argument or solution.
-
-4.  **Constraint Adherence:**
-    *   Strictly adhere to all constraints mentioned in the user's query (e.g., output format, length restrictions, specific knowledge domains to include or exclude). 
-    *   If constraints are conflicting or impossible to meet, state this clearly and explain why.
-
-5.  **Accuracy and Fact-Checking (If Applicable for your use case):**
-    *   Strive for the highest degree of accuracy.
-    *   If external knowledge is required and you have access to it, verify your information.
-    *   If you are making an inference or an assumption, clearly state it as such.
-
-6.  **Output Formatting:**
-    *   Present your final answer clearly and concisely after the chain-of-thought reasoning.
-    *   If a specific output format is requested (e.g., JSON, list, summary), adhere to it strictly. 
-    *   Use delimiters like '### Thought Process ###' and '### Final Answer ###' to clearly separate the reasoning from the final output. 
-
-
-**Key Directives:**
-
-*   **Decompose Complex Tasks:** Break down complex questions into smaller, manageable sub-problems. Address each sub-problem systematically. 
-*   **Affirmative Directives:** Use "do" instead of "don't" where possible. For example, instead of "Don't be vague," use "Be specific and provide details." *   **Step-Back Questioning (Consider if useful for your tasks):** Before diving into a solution, ask yourself "What is the core question here?" or "What underlying principle is at play?"
-*   **Self-Correction/Refinement (Consider for iterative tasks):** After generating an initial thought process, review it. Ask: "Is this logic sound? Are there any gaps? Can this be explained more clearly?" Some advanced techniques even involve asking the LLM to self-critique its output.
-
-**Example of How to Use Delimiters (Illustrative):**
-
-User Query: [User's Question]
-
-### Thought Process ###
-1.  [Step 1 of reasoning]
-2.  [Step 2 of reasoning]
-3.  [And so on...]
-
-
-Even for simple questions, show some thinking process.]
-</thinking>
-
-[Your final answer only - no headers, no "Final Answer:", no special formatting]
-
-CRITICAL RULES:
-- ALWAYS include <thinking> tags with actual reasoning content
-- Never leave <thinking> section empty
-- Show your actual step-by-step thought process
-- Final answer comes after </thinking> with no special formatting
-- No "✅", "Final Answer:", or "##" markers in the final answer`;
 
 const Helper = () => {
   const { toast } = useToast();
@@ -315,9 +202,19 @@ const Helper = () => {
   const [currentMessage, setCurrentMessage] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
-    // Configuration state
+  // Configuration state
   const [selectedAgent, setSelectedAgent] = useState<AgentPrompt>(HELPER_AGENTS[0]);
-  const [selectedModel, setSelectedModel] = useState<GeminiModel>(getDefaultModel());
+  const [selectedModel, setSelectedModel] = useState<GeminiModel>(() => {
+    // Load persisted model from localStorage on initialization
+    const savedModelId = localStorage.getItem('selected_model_id');
+    if (savedModelId) {
+      const savedModel = getModelById(savedModelId);
+      if (savedModel) {
+        return savedModel;
+      }
+    }
+    return getDefaultModel();
+  });
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]); // Files staged for the next message
   const [geminiUploadedFiles, setGeminiUploadedFiles] = useState<GeminiFile[]>([]); // Files uploaded to Gemini service
   
@@ -332,7 +229,7 @@ const Helper = () => {
   const [isServiceInitialized, setIsServiceInitialized] = useState(false);
   
   // Reasoning Mode
-  const [isReasoningMode, setIsReasoningMode] = useState(false);
+  const [isThinkingMode, setIsThinkingMode] = useState(false);
 
   // RAG state - REMOVED
   // const [ragDocuments, setRagDocuments] = useState<DocumentChunk[]>([]);
@@ -387,8 +284,12 @@ const Helper = () => {
       if (storedHistory) {
         localStorage.removeItem(LOCAL_STORAGE_CHAT_HISTORY_KEY);
       }
-    }
-  }, [messages]);
+    }  }, [messages]);
+  
+  // Save selected model to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('selected_model_id', selectedModel.id);
+  }, [selectedModel]);
   
   // Auto-scroll to bottom
   useEffect(() => {
@@ -660,11 +561,11 @@ const Helper = () => {
       agent: selectedAgent,
       model: selectedModel,
       isLoading: true,
-      isReasoningMode: isReasoningMode,
-      isThinking: isReasoningMode,
+      isThinkingMode: isThinkingMode,
+      isThinking: isThinkingMode,
       thinkingProcess: '',
       finalAnswer: '',
-    };    setMessages(prev => [...prev, userMessage, assistantMessagePlaceholder]);
+    };setMessages(prev => [...prev, userMessage, assistantMessagePlaceholder]);
     setCurrentMessage('');
     setUploadedFiles([]); // Clear staged files from input bar
     
@@ -681,9 +582,8 @@ const Helper = () => {
           msg.id !== assistantMessageId // Exclude the placeholder assistant message we just added
         ) 
         .slice(-MAX_HISTORY_MESSAGES) // Take only the most recent messages
-        .map(msg => {
-          // For reasoning mode messages, use the final answer in history
-          const contentToUse = msg.isReasoningMode && msg.finalAnswer 
+        .map(msg => {          // For thinking mode messages, use the final answer in history
+          const contentToUse = msg.isThinkingMode && msg.finalAnswer 
             ? msg.finalAnswer 
             : msg.content;
           
@@ -712,35 +612,32 @@ const Helper = () => {
         while (cleanedHistory.length > 0 && cleanedHistory[0].role !== 'user') {
           cleanedHistory.shift();
         }
-      }      // Debug: log conversation history state
-
-      // Use the enhanced prompt as current message
+      }      // Debug: log conversation history state      // Use the enhanced prompt as current message
       const currentPrompt = messageContent || `Please analyze the ${filesForGemini.length > 0 ? 'uploaded files' : 'previous context'} and provide insights.`;
-        // Choose system prompt based on reasoning mode
-      const systemPrompt = isReasoningMode ? REASONING_MODE_SYSTEM_PROMPT : selectedAgent.systemPrompt;
-        // Use the new conversation history method if there's history, otherwise fall back to the original method
+        
+      // Use the new conversation history method if there's history, otherwise fall back to the original method
       // IMPORTANT: Image generation models don't support conversation history, so always use generateContent for them
       const response = (cleanedHistory.length > 0 && !selectedModel.supportsImageGeneration) 
         ? await geminiService.generateContentWithHistory(
             currentPrompt,
-            systemPrompt,
+            selectedAgent.systemPrompt, // Use normal agent prompt - thinking is handled by API
             cleanedHistory,
             filesForGemini.length > 0 ? filesForGemini : undefined,
             selectedModel,
-            filesForThisMessage.length > 0 ? filesForThisMessage : undefined // Pass raw files for OpenRouter
+            filesForThisMessage.length > 0 ? filesForThisMessage : undefined, // Pass raw files for OpenRouter
+            isThinkingMode // Enable thinking mode via API
           )
         : await geminiService.generateContent(
             currentPrompt,
-            systemPrompt,
+            selectedAgent.systemPrompt, // Use normal agent prompt - thinking is handled by API
             filesForGemini.length > 0 ? filesForGemini : undefined,
             selectedModel,
-            filesForThisMessage.length > 0 ? filesForThisMessage : undefined // Pass raw files for OpenRouter
-          );
-
-      // Process response based on reasoning mode
-      if (isReasoningMode) {
-        // Parse reasoning mode response to separate thinking process from final answer
-        const parsed = parseReasoningResponse(response);
+            filesForThisMessage.length > 0 ? filesForThisMessage : undefined, // Pass raw files for OpenRouter
+            isThinkingMode // Enable thinking mode via API
+          );      // Process response based on thinking mode
+      if (isThinkingMode) {
+        // Parse thinking mode response to separate thinking process from final answer
+        const parsed = parseThinkingResponse(response);
         
         // First, stop the loading state and start showing thinking process
         setMessages(prev => prev.map(msg => 
@@ -749,11 +646,12 @@ const Helper = () => {
                 ...msg, 
                 isLoading: false,
                 isThinking: true,
-                isReasoningMode: true,
+                isThinkingMode: true,
                 thinkingProcess: '',
                 finalAnswer: ''
               }
-            : msg        ));
+            : msg
+        ));
         
         // Small delay to ensure state update is processed
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -838,13 +736,12 @@ const Helper = () => {
     uploadedFiles, 
     geminiUploadedFiles, 
     selectedAgent, 
-    selectedModel, 
-    isServiceInitialized, 
+    selectedModel,    isServiceInitialized, 
     isProcessing, 
     toast, 
     geminiApiKey, 
     openRouterApiKey, 
-    isReasoningMode, 
+    isThinkingMode, 
     messages
   ]);
   // Function to regenerate the last response
@@ -894,11 +791,10 @@ const Helper = () => {
         type: 'assistant',
         content: '',
         timestamp: new Date(),
-        agent: lastUserMessage.agent || selectedAgent,
-        model: lastUserMessage.model || selectedModel,
+        agent: lastUserMessage.agent || selectedAgent,        model: lastUserMessage.model || selectedModel,
         isLoading: true,
-        isReasoningMode: isReasoningMode,
-        isThinking: isReasoningMode,
+        isThinkingMode: isThinkingMode,
+        isThinking: isThinkingMode,
         thinkingProcess: '',
         finalAnswer: '',
       };
@@ -916,8 +812,7 @@ const Helper = () => {
             msg.content.trim()
           ) 
           .slice(-MAX_HISTORY_MESSAGES)
-          .map(msg => {
-            const contentToUse = msg.isReasoningMode && msg.finalAnswer 
+          .map(msg => {            const contentToUse = msg.isThinkingMode && msg.finalAnswer 
               ? msg.finalAnswer 
               : msg.content;
             
@@ -951,10 +846,8 @@ const Helper = () => {
           filesForGemini = geminiUploadedFiles.filter(gf => 
             lastUserMessage.files!.some(lf => lf.name === gf.displayName)
           );
-        }
-
-        const currentPrompt = lastUserMessage.content || `Please analyze the ${filesForGemini.length > 0 ? 'uploaded files' : 'previous context'} and provide insights.`;
-        const systemPrompt = isReasoningMode ? REASONING_MODE_SYSTEM_PROMPT : (lastUserMessage.agent || selectedAgent).systemPrompt;
+        }        const currentPrompt = lastUserMessage.content || `Please analyze the ${filesForGemini.length > 0 ? 'uploaded files' : 'previous context'} and provide insights.`;
+        const systemPrompt = (lastUserMessage.agent || selectedAgent).systemPrompt; // Use normal agent prompt - thinking handled by API
         const modelToUse = lastUserMessage.model || selectedModel;
           // Generate response
         // IMPORTANT: Image generation models don't support conversation history, so always use generateContent for them
@@ -965,19 +858,19 @@ const Helper = () => {
               cleanedHistory,
               filesForGemini.length > 0 ? filesForGemini : undefined,
               modelToUse,
-              lastUserMessage.files || undefined
+              lastUserMessage.files || undefined,
+              isThinkingMode // Enable thinking mode via API
             )
           : await geminiService.generateContent(
               currentPrompt,
               systemPrompt,
               filesForGemini.length > 0 ? filesForGemini : undefined,
               modelToUse,
-              lastUserMessage.files || undefined
-            );
-
-        // Process response based on reasoning mode
-        if (isReasoningMode) {
-          const parsed = parseReasoningResponse(response);
+              lastUserMessage.files || undefined,
+              isThinkingMode // Enable thinking mode via API
+            );        // Process response based on thinking mode
+        if (isThinkingMode) {
+          const parsed = parseThinkingResponse(response);
           
           setMessages(prev => prev.map(msg => 
             msg.id === assistantMessageId 
@@ -985,7 +878,7 @@ const Helper = () => {
                   ...msg, 
                   isLoading: false,
                   isThinking: true,
-                  isReasoningMode: true,
+                  isThinkingMode: true,
                   thinkingProcess: '',
                   finalAnswer: ''
                 }
@@ -1062,7 +955,7 @@ const Helper = () => {
     // Execute regeneration
     regenerateMessage();
     
-  }, [messages, isProcessing, selectedAgent, selectedModel, toast, isReasoningMode, geminiUploadedFiles]);
+  }, [messages, isProcessing, selectedAgent, selectedModel, toast, isThinkingMode, geminiUploadedFiles]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1155,8 +1048,7 @@ const Helper = () => {
       return;
     }
 
-    try {
-      const contentToExport = lastMessage.isReasoningMode 
+    try {      const contentToExport = lastMessage.isThinkingMode 
         ? (lastMessage.finalAnswer || lastMessage.content)
         : lastMessage.content;
       
@@ -1205,8 +1097,7 @@ const Helper = () => {
       return;
     }
 
-    try {
-      const contentToExport = lastMessage.isReasoningMode 
+    try {      const contentToExport = lastMessage.isThinkingMode 
         ? (lastMessage.finalAnswer || lastMessage.content)
         : lastMessage.content;
       
@@ -1240,61 +1131,7 @@ const Helper = () => {
         description: "Failed to export response as DOCX.",
         variant: "destructive"
       });
-    }
-  }, [messages, toast, selectedAgent, selectedModel]);  // Helper function to parse content and extract images
-  function parseContentWithImages(content: string): { text: string; images: string[] } {
-    const images: string[] = [];
-    let text = content;
-    
-    // Find markdown image patterns: ![alt text](data:image/...)
-    const markdownImageRegex = /!\[([^\]]*)\]\((data:image\/[^;]+;base64,[^)]+)\)/g;
-    let match;
-    
-    while ((match = markdownImageRegex.exec(content)) !== null) {
-      images.push(match[2]); // Extract the data URL
-      // Replace the markdown image with a placeholder
-      text = text.replace(match[0], `[Image ${images.length}]`);
-    }
-    
-    // Find HTML image patterns: <img src="data:image/..." ... />
-    const htmlImageRegex = /<img[^>]+src="(data:image\/[^;]+;base64,[^"]+)"[^>]*\/?>/g;
-    
-    while ((match = htmlImageRegex.exec(content)) !== null) {
-      images.push(match[1]); // Extract the data URL
-      // Replace the HTML image with a placeholder
-      text = text.replace(match[0], `[Image ${images.length}]`);
-    }
-    
-    return { text: text.trim(), images };
-  }
-
-  // Component to render images
-  function ImageDisplay({ images }: { images: string[] }) {
-    if (images.length === 0) return null;
-    
-    return (
-      <div className="mt-3 space-y-2">
-        {images.map((imageData, index) => (
-          <div key={index} className="border rounded-lg overflow-hidden bg-muted/50">
-            <img 
-              src={imageData}
-              alt={`Generated Image ${index + 1}`}
-              className="w-full max-w-md rounded-lg shadow-sm"
-              style={{ maxHeight: '400px', objectFit: 'contain' }}
-              onError={(e) => {
-                console.error('Failed to load image:', e);
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-              }}
-            />
-            <div className="p-2 text-xs text-muted-foreground bg-muted/30">
-              Generated Image {index + 1}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
+    }  }, [messages, toast, selectedAgent, selectedModel]);
 
   return (
     <div className="flex flex-col h-full bg-background" {...getRootProps()}>
@@ -1334,10 +1171,20 @@ const Helper = () => {
 
           {/* Model Select */}
           <Select
-            value={selectedModel.id}
-            onValueChange={(value) => {
+            value={selectedModel.id}            onValueChange={(value) => {
               const model = getModelById(value);
-              if (model) setSelectedModel(model);
+              if (model) {
+                setSelectedModel(model);
+                // Automatically disable thinking mode if the new model doesn't support it
+                if (isThinkingMode && !supportsThinking(model)) {
+                  setIsThinkingMode(false);
+                  toast({
+                    title: "Thinking mode disabled",
+                    description: `${model.name} doesn't support thinking mode. Switched to regular mode.`,
+                    variant: "default"
+                  });
+                }
+              }
             }}
           >
             <SelectTrigger className="w-auto h-9 text-xs sm:text-sm px-2 sm:px-3 min-w-[120px] max-w-[200px]">
@@ -1365,32 +1212,8 @@ const Helper = () => {
                       )}
                   </div>
                 </SelectItem>
-              ))}
-            </SelectContent>
+              ))}            </SelectContent>
           </Select>
-            <Popover>
-                <PopoverTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-9 px-2 text-muted-foreground hover:text-foreground">
-                        <Info className="h-4 w-4"/>
-                    </Button>
-                </PopoverTrigger>                <PopoverContent className="w-64 text-sm">
-                    <div className="space-y-2">
-                        <h4 className="font-medium leading-none">{selectedModel.name}</h4>
-                        <div className="flex items-center gap-1">
-                          {selectedModel.supportsGrounding ? (
-                            <>
-                              <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                              <span className="text-xs text-green-600">Google Search enabled</span>
-                            </>
-                          ) : (
-                            <>
-                              <Bot className="h-3.5 w-3.5 text-blue-500" />
-                              <span className="text-xs text-blue-600">Standard AI model</span>
-                            </>
-                          )}
-                        </div>
-                    </div>
-                </PopoverContent></Popover>
         </div>
         
         <div className="flex items-center gap-1 sm:gap-2">
@@ -1451,14 +1274,10 @@ const Helper = () => {
             </div>
           ) : (
             <div className="space-y-6 pt-6"> {/* Added pt-6 */}
-              {messages.map((message) => (
-                <div key={message.id} className="group">
-                  <div className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    {message.type === 'assistant' && (
-                      <div className="flex-shrink-0 self-end mb-2"> {/* Align with bottom of message bubble */}
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Bot className="h-4 w-4 text-primary" />
-                        </div>
+              {messages.map((message) => (                <div key={message.id} className="group">                  <div className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'} items-start`}>
+                    {message.type === 'assistant' && (message.isLoading || message.isThinking) && (
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mt-1">
+                        <ThinkingAnimation variant="pulse" text="" size="sm" className="justify-center" />
                       </div>
                     )}
                     
@@ -1469,34 +1288,33 @@ const Helper = () => {
                           ? 'bg-primary text-primary-foreground ml-auto' // Removed ml-12, rely on justify-end
                           : 'bg-muted'
                       )}>                        {message.isLoading ? (
-                          <div className="flex items-center gap-2 text-sm">
-                            {message.isReasoningMode ? (
-                              <Brain className="h-4 w-4 animate-pulse" />
-                            ) : (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            )}
-                            <span>{message.isReasoningMode ? 'Thinking...' : 'Processing...'}</span>
-                          </div>
-                        ) : message.isThinking ? (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Brain className="h-3 w-3 animate-pulse" />
-                              <span>Thinking...</span>
-                            </div>                            <div className="bg-muted/50 border border-border/30 rounded-lg p-3">
+                          <ThinkingAnimation 
+                            variant={message.isThinkingMode ? "brain" : "dots"}
+                            text={message.isThinkingMode ? 'Thinking...' : 'Processing...'}
+                            size="md"
+                          />
+                        ) : message.isThinking ? (                          <div className="space-y-2">
+                            <ThinkingAnimation 
+                              variant="brain"
+                              text="Thinking..."
+                              size="sm"
+                            />
+                            <div className="bg-muted/50 border border-border/30 rounded-lg p-3">
                               <div className="whitespace-pre-wrap text-sm leading-relaxed break-words text-muted-foreground">
                                 {cleanResponseFormatting(message.thinkingProcess)}
                                 <span className="animate-pulse">▊</span>
                               </div>
                             </div>
                           </div>                        ) : (
-                          <div className="space-y-3">
-                            {/* Show thinking process only when actively thinking */}
-                            {message.isReasoningMode && message.thinkingProcess && message.isThinking && (
+                          <div className="space-y-3">                            {/* Show thinking process only when actively thinking */}
+                            {message.isThinkingMode && message.thinkingProcess && message.isThinking && (
                               <div className="space-y-2">
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  <Brain className="h-3 w-3" />
-                                  <span>Thinking process</span>
-                                </div>                                <div className="bg-muted/50 border border-border/30 rounded-lg p-3">
+                                <ThinkingAnimation 
+                                  variant="brain"
+                                  text="Thinking process"
+                                  size="sm"
+                                />
+                                <div className="bg-muted/50 border border-border/30 rounded-lg p-3">
                                   <div className="whitespace-pre-wrap text-sm leading-relaxed break-words text-muted-foreground">
                                     {cleanResponseFormatting(message.thinkingProcess)}
                                   </div>
@@ -1505,21 +1323,18 @@ const Helper = () => {
                             )}                              {/* Main content (final answer in reasoning mode, or full content otherwise) */}
                             <div className="space-y-2">
                               {(() => {
-                                const contentToRender = message.isReasoningMode ? (message.finalAnswer || message.content) : message.content;
-                                const { text, images } = parseContentWithImages(contentToRender);
+                                const contentToRender = message.isThinkingMode ? (message.finalAnswer || message.content) : message.content;
                                 
+                                // Don't apply aggressive cleaning to main content - let MessageContent handle code formatting
                                 return (
-                                  <>
-                                    <div className="whitespace-pre-wrap text-sm leading-relaxed break-words">
-                                      {cleanResponseFormatting(text)}
-                                    </div>
-                                    <ImageDisplay images={images} />
-                                  </>
+                                  <MessageContent 
+                                    content={contentToRender}
+                                  />
                                 );
                               })()}
                             </div>
                               {/* Show reasoning mode indicator for assistant messages (legacy support) */}
-                            {message.type === 'assistant' && !message.isReasoningMode && (message.content.includes('🧠 Reasoning Process:') || message.content.includes('🧠 AI Response (Reasoning Mode):')) && (
+                            {message.type === 'assistant' && !message.isThinkingMode && (message.content.includes('🧠 Reasoning Process:') || message.content.includes('🧠 AI Response (Reasoning Mode):')) && (
                               <div className="flex items-center gap-1.5 text-xs text-primary/70 bg-primary/5 px-2 py-1 rounded">
                                 <Brain className="h-3 w-3" />
                                 <span>Reasoning Mode Response</span>
@@ -1551,8 +1366,8 @@ const Helper = () => {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => {                              const contentToCopy = message.isReasoningMode 
-                                ? (message.finalAnswer || message.content) // Only copy final answer for reasoning mode
+                              onClick={() => {                              const contentToCopy = message.isThinkingMode 
+                                ? (message.finalAnswer || message.content) // Only copy final answer for thinking mode
                                 : message.content;
                               copyMessage(contentToCopy);
                             }}
@@ -1602,17 +1417,8 @@ const Helper = () => {
                             {React.createElement(getAgentIcon(message.agent.icon), { className: "h-3 w-3 mr-1 inline-block" })}
                             {message.agent.name}
                           </Badge>
-                        )}
-                      </div>
+                        )}                      </div>
                     </div>
-                    
-                    {message.type === 'user' && (
-                       <div className="flex-shrink-0 self-end mb-2"> {/* Align with bottom of message bubble */}
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                          <User className="h-4 w-4" />
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
@@ -1650,12 +1456,10 @@ const Helper = () => {
                   <span>Uploading... ({uploadProgress.toFixed(0)}%)</span>
                 </div>
               )}
-            </div>
-          )}          {/* Reasoning Mode Indicator */}
-          {isReasoningMode && (
+            </div>          )}          {/* Thinking Mode Indicator */}
+          {isThinkingMode && (
             <div className="mb-2 flex items-center gap-2 p-2 bg-primary/10 rounded-md border border-primary/20">
-              <Brain className="h-4 w-4 text-primary" />
-              <span className="text-sm text-primary font-medium">Reasoning Mode Active</span>
+              <ThinkingAnimation variant="brain" text="Thinking Mode Active" size="sm" />
               <span className="text-xs text-primary/70">AI will show step-by-step thinking process</span>
             </div>
           )}
@@ -1677,17 +1481,33 @@ const Helper = () => {
             </Button>
             
             <Button
-              variant={isReasoningMode ? "default" : "ghost"}
+              variant={isThinkingMode ? "default" : "ghost"}
               size="icon"
-              onClick={() => setIsReasoningMode(!isReasoningMode)}
+              onClick={() => {
+                if (!supportsThinking(selectedModel)) {
+                  toast({
+                    title: "Thinking mode not supported",
+                    description: "Thinking mode only works with Gemini 2.5 series models. Please select a compatible model.",
+                    variant: "destructive"
+                  });
+                  return;
+                }
+                setIsThinkingMode(!isThinkingMode);
+              }}
               disabled={isProcessing}
-              className={cn(
-                "h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0",
-                isReasoningMode 
+              className={cn(                "h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0",
+                isThinkingMode 
                   ? "bg-primary text-primary-foreground hover:bg-primary/90" 
-                  : "text-muted-foreground hover:text-primary"
+                  : "text-muted-foreground hover:text-primary",
+                !supportsThinking(selectedModel) && "opacity-50"
               )}
-              title={isReasoningMode ? "Reasoning mode enabled - AI will show step-by-step thinking" : "Enable reasoning mode"}
+              title={
+                !supportsThinking(selectedModel) 
+                  ? "Thinking mode requires Gemini 2.5 series models" 
+                  : isThinkingMode 
+                    ? "Thinking mode enabled - AI will show step-by-step thinking" 
+                    : "Enable thinking mode"
+              }
             >
               <Brain className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
@@ -1696,7 +1516,7 @@ const Helper = () => {
               value={currentMessage}
               onChange={(e) => setCurrentMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={isReasoningMode ? "Ask anything... (reasoning mode will show step-by-step thinking)" : "Ask anything..."}
+              placeholder={isThinkingMode ? "Ask anything... (thinking mode will show step-by-step thinking)" : "Ask anything..."}
               className="flex-1 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 resize-none min-h-[24px] max-h-[120px] self-center py-2 sm:py-2.5 px-2 text-sm sm:text-base placeholder:text-muted-foreground/70"
               disabled={isProcessing || isUploading}
               rows={1}            />

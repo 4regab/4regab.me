@@ -14,7 +14,18 @@ export const GEMINI_MODELS: GeminiModel[] = [
     supportsGrounding: true,
     supportsVision: true,
     provider: 'google',
-  },  {
+  },
+  {
+    id: 'gemini-2.5-flash-preview-04-17',
+    name: 'Gemini 2.5 Flash Preview 04-17',
+    description: 'Preview model from April 17th with enhanced capabilities',
+    modelName: 'gemini-2.5-flash-preview-04-17',
+    isDefault: false,
+    supportsGrounding: true,
+    supportsVision: true,
+    provider: 'google',
+  },
+  {
     id: 'gemini-2.0-flash-image-generation',
     name: 'Gemini 2.0 Flash Image Generation',
     description: 'Advanced model with image generation capabilities. Supports text-to-image and image editing with multimodal input/output. Note: Does not support web search/grounding.',
