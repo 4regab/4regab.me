@@ -1,2 +1,84 @@
-node_modules
-dist
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.npm
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.nuxt/
+.vuepress/dist/
+
+# Runtime and cache
+.cache/
+.parcel-cache/
+.nitro/
+.output/
+.vite/
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# Editor directories and files
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testing
+coverage/
+.nyc_output/
+.jest/
+
+# TypeScript
+*.tsbuildinfo
+
+# API Keys and secrets (if any config files contain them)
+config/secrets.json
+secrets.json
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Lock files (choose one based on package manager)
+# package-lock.json  # uncomment if using yarn/pnpm
+# yarn.lock          # uncomment if using npm/pnpm
+# pnpm-lock.yaml     # uncomment if using npm/yarn
+
+# Optional: Vercel
+.vercel
+
+# Optional: ESLint cache
+.eslintcache
