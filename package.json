@@ -4,13 +4,12 @@
   "version": "1.0.0",
   "description": "A comprehensive suite of AI-powered tools built with React, TypeScript, and Google's Gemini AI",
   "keywords": ["ai", "tools", "react", "typescript", "gemini", "translator", "tts", "chat-assistant"],
-  "homepage": "https://4regab.me",
-  "repository": {
+  "homepage": "https://4regab.me",  "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/4regab.git"
+    "url": "https://github.com/4regab/4regab.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/4regab/issues"
+    "url": "https://github.com/4regab/4regab/issues"
   },
   "license": "MIT",
   "author": {
