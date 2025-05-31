@@ -45,6 +45,13 @@ export interface GeminiFile {
   sha256Hash: string;
   uri: string;
   state: 'PROCESSING' | 'ACTIVE' | 'FAILED';
+  videoMetadata?: VideoMetadata; // Optional video metadata
+}
+
+export interface VideoMetadata {
+  fps?: number; // Custom frame rate sampling (default is 1 FPS)
+  startOffset?: string; // Start time offset for clipping (e.g., "125s" or "2m5s")
+  endOffset?: string; // End time offset for clipping (e.g., "320s" or "5m20s")
 }
 
 export interface ExportOptions {

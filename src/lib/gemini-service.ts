@@ -257,7 +257,8 @@ class GeminiService {
     files?: GeminiFile[],
     model?: GeminiModel,
     rawFiles?: File[],
-    enableThinking?: boolean
+    enableThinking?: boolean,
+    abortSignal?: AbortSignal
   ): Promise<string> {
     this.ensureInitialized();
     
@@ -272,7 +273,7 @@ class GeminiService {
       // Ensure we have the right API key for this model type
       this.ensureModelApiKey();      // Handle OpenRouter models
       if (currentModel.provider === 'openrouter') {
-        return await this.generateContentOpenRouter(prompt, systemPrompt, currentModel, undefined, files, rawFiles);
+        return await this.generateContentOpenRouter(prompt, systemPrompt, currentModel, undefined, files, rawFiles, abortSignal);
       }
       
       // Clean the system prompt of any potential problematic characters
@@ -286,15 +287,14 @@ class GeminiService {
       });
 
       // Prepare the content array for the current message
-      const contents: any[] = [];
-
-      // Add files if provided
+      const contents: any[] = [];      // Add files if provided
       if (files && files.length > 0) {
         for (const file of files) {
-          // Ensure file is processed
-          if (file.state !== 'ACTIVE') {
-            await this.waitForFileProcessing(file.name);
-          }
+          // TODO: Fix CORS issue - temporarily skip file processing wait
+          // if (file.state !== 'ACTIVE') {
+          //   await this.waitForFileProcessing(file.name);
+          // }
+          console.log(`Using file: ${file.name} (state: ${file.state || 'unknown'})`);
           
           contents.push({
             fileData: {
@@ -346,8 +346,14 @@ class GeminiService {
         tools: requestConfig.config.tools,
         hasSystemInstruction: !!requestConfig.config.systemInstruction,
         hasResponseModalities: !!requestConfig.config.responseModalities,
-        hasThinkingConfig: !!requestConfig.config.thinkingConfig,        responseModalities: requestConfig.config.responseModalities
-      });// Use different API methods based on model capabilities
+        hasThinkingConfig: !!requestConfig.config.thinkingConfig,        responseModalities: requestConfig.config.responseModalities      });
+
+      // Add abort signal support to request config
+      if (abortSignal) {
+        requestConfig.signal = abortSignal;
+      }
+
+      // Use different API methods based on model capabilities
       let response;      if (this.currentModel.supportsImageGeneration) {
         // For image generation models, use the requestConfig that already has correct responseModalities
         console.log('🔍 IMAGE GENERATION REQUEST:', JSON.stringify(requestConfig, null, 2));
@@ -573,8 +579,7 @@ class GeminiService {
   /**
    * Check if a file type is supported by Gemini
    */
-  isSupportedFileType(file: File): boolean {
-    const supportedTypes = [
+  isSupportedFileType(file: File): boolean {    const supportedTypes = [
       // Text files
       'text/plain',
       'text/markdown',
@@ -602,6 +607,14 @@ class GeminiService {
       'image/webp',
       'image/svg+xml',
       
+      // Videos
+      'video/mp4',
+      'video/mpeg',
+      'video/webm',
+      'video/avi',
+      'video/quicktime',
+      'video/x-msvideo',
+      
       // Code files
       'application/x-python-code',
       'text/x-python',
@@ -623,17 +636,16 @@ class GeminiService {
     }
     
     // Check file extension as fallback
-    const fileName = file.name.toLowerCase();
-    const supportedExtensions = [
+    const fileName = file.name.toLowerCase();    const supportedExtensions = [
       '.txt', '.md', '.csv', '.json', '.xml', '.html', '.css', '.js', '.ts', 
       '.py', '.java', '.c', '.cpp', '.php', '.rb', '.go', '.swift', '.kt',
       '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-      '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'
+      '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg',
+      '.mp4', '.mpeg', '.mpg', '.webm', '.avi', '.mov'
     ];
     
     return supportedExtensions.some(ext => fileName.endsWith(ext));
-  }
-  /**
+  }  /**
    * Generate content with conversation history
    */
   async generateContentWithHistory(
@@ -643,7 +655,8 @@ class GeminiService {
     files?: GeminiFile[],
     model?: GeminiModel,
     rawFiles?: File[],
-    enableThinking?: boolean
+    enableThinking?: boolean,
+    abortSignal?: AbortSignal
   ): Promise<string> {
     this.ensureInitialized();
     
@@ -656,11 +669,9 @@ class GeminiService {
       const currentModel = model || this.currentModel;
       
       // Ensure we have the right API key for this model type
-      this.ensureModelApiKey();
-
-      // Handle OpenRouter models
+      this.ensureModelApiKey();      // Handle OpenRouter models
       if (currentModel.provider === 'openrouter') {
-        return await this.generateContentOpenRouter(prompt, systemPrompt, currentModel, conversationHistory, files, rawFiles);
+        return await this.generateContentOpenRouter(prompt, systemPrompt, currentModel, conversationHistory, files, rawFiles, abortSignal);
       }
       
       // Clean the system prompt of any potential problematic characters
@@ -687,12 +698,11 @@ class GeminiService {
 
       // Add files if provided
       if (files && files.length > 0) {
-        for (const file of files) {
-          // Ensure file is processed
-          if (file.state !== 'ACTIVE') {
-            await this.waitForFileProcessing(file.name);
-          }
-          
+        for (const file of files) {          // TODO: Fix CORS issue - temporarily skip file processing wait
+          // if (file.state !== 'ACTIVE') {
+          //   await this.waitForFileProcessing(file.name);
+          // }
+          console.log(`Using file: ${file.name} (state: ${file.state || 'unknown'})`);
           currentParts.push({
             fileData: {
               fileUri: file.uri,
@@ -751,12 +761,16 @@ class GeminiService {
         hasSystemInstruction: !!requestConfig.config.systemInstruction,
         hasResponseModalities: !!requestConfig.config.responseModalities,
         hasThinkingConfig: !!requestConfig.config.thinkingConfig,
-        responseModalities: requestConfig.config.responseModalities,
-        contentsLength: contents.length
+        responseModalities: requestConfig.config.responseModalities,        contentsLength: contents.length
       });
 
+      // Add abort signal support to request config
+      if (abortSignal) {
+        requestConfig.signal = abortSignal;
+      }
+
       // Use generateContent with the new API
-      const response = await this.client.models.generateContent(requestConfig);      console.log('=== DEBUGGING HISTORY IMAGE GENERATION RESPONSE ===');
+      const response = await this.client.models.generateContent(requestConfig);console.log('=== DEBUGGING HISTORY IMAGE GENERATION RESPONSE ===');
       console.log('Full response object:', response);
       console.log('Response constructor:', response.constructor.name);
       console.log('Response keys:', Object.keys(response));
@@ -910,7 +924,6 @@ class GeminiService {
       throw new Error(`Failed to generate content: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
-
   /**
    * Generate content using OpenRouter API
    */
@@ -920,7 +933,8 @@ class GeminiService {
     model: GeminiModel,
     conversationHistory?: Content[],
     files?: GeminiFile[],
-    rawFiles?: File[]
+    rawFiles?: File[],
+    abortSignal?: AbortSignal
   ): Promise<string> {
     if (!this.openRouterApiKey) {
       throw new Error('OpenRouter API key is required for OpenRouter models');
@@ -971,9 +985,7 @@ class GeminiService {
     messages.push({
       role: 'user',
       content: currentContent
-    });
-
-    try {
+    });    try {
       const response = await fetch(model.apiUrl, {
         method: 'POST',
         headers: {
@@ -988,7 +1000,8 @@ class GeminiService {
           temperature: 0.7,
           max_tokens: 4000,
           stream: false
-        })
+        }),
+        signal: abortSignal
       });
 
       if (!response.ok) {
@@ -1181,6 +1194,31 @@ class GeminiService {
     });
 
     return { thoughts: thoughts.trim(), answer: answer.trim() };
+  }
+
+  /**
+   * Check if a file is a video file
+   */
+  isVideoFile(file: File): boolean {
+    const videoTypes = [
+      'video/mp4',
+      'video/mpeg',
+      'video/webm',
+      'video/avi',
+      'video/quicktime', // .mov files
+      'video/x-msvideo' // .avi files
+    ];
+    
+    // Check MIME type
+    if (videoTypes.includes(file.type)) {
+      return true;
+    }
+    
+    // Check file extension as fallback
+    const fileName = file.name.toLowerCase();
+    const videoExtensions = ['.mp4', '.mpeg', '.mpg', '.webm', '.avi', '.mov'];
+    
+    return videoExtensions.some(ext => fileName.endsWith(ext));
   }
 }
 

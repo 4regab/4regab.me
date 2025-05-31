@@ -227,18 +227,15 @@ export function parseMessageContent(content: string): ParsedContent[] {
       }
     }
   });
-
   // Only use smart code detection if NO markdown code blocks were found
   if (!matches.some(match => match.type === 'code' && match.source === 'markdown')) {
-    console.log('No markdown code blocks found, using smart detection');
+    // Using smart detection for code blocks
     const codeBlocks = detectCodeBlocks(content, matches);
     const smartMatches = codeBlocks.map(block => ({
       ...block,
       source: 'smart' as const
     }));
     matches.push(...smartMatches);
-  } else {
-    console.log('Markdown code blocks found, skipping smart detection to prevent duplicates');
   }
 
   // Remove overlapping matches (prioritize markdown over smart detection)
@@ -252,14 +249,8 @@ export function parseMessageContent(content: string): ParsedContent[] {
       (match.index + match.length > existing.index && match.index + match.length <= existing.index + existing.length) ||
       (match.index <= existing.index && match.index + match.length >= existing.index + existing.length)
     );
-    
-    if (!overlaps) {
+      if (!overlaps) {
       deduplicatedMatches.push(match);
-    } else {
-      console.log('Removed overlapping match:', { 
-        content: match.content.substring(0, 50) + '...', 
-        source: match.source 
-      });
     }
   }
 

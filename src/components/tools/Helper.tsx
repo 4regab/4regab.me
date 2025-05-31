@@ -15,7 +15,6 @@ import { GEMINI_MODELS, getDefaultModel, getModelById, getModelConfig } from '@/
 import { HELPER_AGENTS, getAgentById, getAgentIcon } from '@/lib/helper-agents';
 import geminiService from '@/lib/gemini-service';
 import { ExportService } from '@/lib/export-service';
-import ThinkingAnimation from '@/components/ui/thinking-animation';
 import MessageContent from '@/components/ui/message-content';
 // import { ragService, type DocumentChunk, type RAGContext } from '@/lib/rag-service'; // Removed RAG
 import { type AgentPrompt, type GeminiModel, type GeminiFile, type HelperTask, type ExportOptions } from '@/types/helper';
@@ -45,7 +44,10 @@ const LOCAL_STORAGE_CHAT_HISTORY_KEY = 'gemini_helper_chat_history';
 // Helper function to check if a model supports thinking mode
 function supportsThinking(model: GeminiModel): boolean {
   return model.provider === 'google' && 
-         (model.modelName.includes('2.5') || model.modelName.includes('gemini-2.5'));
+         (model.modelName.includes('2.0') || 
+          model.modelName.includes('2.5') || 
+          model.modelName.includes('gemini-2.0') || 
+          model.modelName.includes('gemini-2.5'));
 }
 
 // Helper function to parse thinking mode response (official API format)
@@ -371,6 +373,19 @@ const Helper = () => {
           variant: "default"
         });
       }
+
+      // Check for video files and provide guidance
+      const videoFiles = supportedFiles.filter(file => geminiService.isVideoFile(file));
+      if (videoFiles.length > 0) {
+        const largeVideos = videoFiles.filter(file => file.size > 20 * 1024 * 1024); // > 20MB
+        if (largeVideos.length > 0) {
+          toast({
+            title: "Large Video Files Detected",
+            description: `${largeVideos.length} video file(s) are larger than 20MB. Upload may take longer and will use the Files API for optimal processing.`,
+            variant: "default"
+          });
+        }
+      }
       
       if (supportedFiles.length === 0 && filesToUpload.length > 0) {
          toast({ title: "No supported files", description: "None of the selected files can be uploaded.", variant: "destructive" });
@@ -381,7 +396,6 @@ const Helper = () => {
         setIsUploading(false);
         return [];
       }
-
 
       for (let i = 0; i < supportedFiles.length; i++) {
         const file = supportedFiles[i];
@@ -395,9 +409,16 @@ const Helper = () => {
         }
         setUploadProgress(((i + 1) / supportedFiles.length) * 100);
       }
-      
-      if (successfullyUploaded.length > 0) {
-        toast({ title: "Files Uploaded", description: `${successfullyUploaded.length} files prepared for AI.` });
+        if (successfullyUploaded.length > 0) {
+        const videoCount = successfullyUploaded.filter(file => file.mimeType.startsWith('video/')).length;
+        const fileTypeMessage = videoCount > 0 
+          ? `${successfullyUploaded.length} files prepared for AI (including ${videoCount} video file${videoCount > 1 ? 's' : ''}).`
+          : `${successfullyUploaded.length} files prepared for AI.`;
+        
+        toast({ 
+          title: "Files Uploaded", 
+          description: fileTypeMessage
+        });
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -518,22 +539,39 @@ const Helper = () => {
       setShowApiKeyDialog(true);
       return;
     }
-    if (isProcessing) return;    // Check if we're trying to send images to a text-only model
-    const hasImages = uploadedFiles.some(file => 
+    if (isProcessing) return;    // Check if we're trying to send images or videos to a text-only model
+    const hasMediaFiles = uploadedFiles.some(file => 
       file.type.startsWith('image/') || 
-      /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name)
+      file.type.startsWith('video/') ||
+      /\.(jpg|jpeg|png|gif|webp|svg|mp4|mpeg|mov|avi|webm|mkv|flv|wmv)$/i.test(file.name)
     );
     
-    if (hasImages && selectedModel.supportsVision === false) {
+    if (hasMediaFiles && selectedModel.supportsVision === false) {
+      const mediaTypes = [];
+      const hasImages = uploadedFiles.some(file => 
+        file.type.startsWith('image/') || 
+        /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name)
+      );
+      const hasVideos = uploadedFiles.some(file => 
+        file.type.startsWith('video/') || 
+        /\.(mp4|mpeg|mov|avi|webm|mkv|flv|wmv)$/i.test(file.name)
+      );
+      
+      if (hasImages) mediaTypes.push('images');
+      if (hasVideos) mediaTypes.push('videos');
+      
       toast({
         title: "Model Limitation",
-        description: `⚠️ ${selectedModel.name} doesn't support images. Please select a vision-capable model (marked with ⚡ Vision) or remove the image files.`,
+        description: `⚠️ ${selectedModel.name} doesn't support ${mediaTypes.join(' or ')}. Please select a vision-capable model (marked with ⚡ Vision) or remove the ${mediaTypes.join('/')} files.`,
         variant: "destructive",
       });
       return;
-    }
-
-    setIsProcessing(true);
+    }    setIsProcessing(true);
+    
+    // Create abort controller for this generation
+    const controller = new AbortController();
+    setAbortController(controller);
+    
     const messageContent = currentMessage.trim();
     const filesForThisMessage = [...uploadedFiles]; // Files staged in the input bar
     
@@ -561,11 +599,12 @@ const Helper = () => {
       agent: selectedAgent,
       model: selectedModel,
       isLoading: true,
-      isThinkingMode: isThinkingMode,
-      isThinking: isThinkingMode,
+      isThinkingMode: isThinkingMode,      isThinking: isThinkingMode,
       thinkingProcess: '',
       finalAnswer: '',
-    };setMessages(prev => [...prev, userMessage, assistantMessagePlaceholder]);
+    };
+    
+    setMessages(prev => [...prev, userMessage, assistantMessagePlaceholder]);
     setCurrentMessage('');
     setUploadedFiles([]); // Clear staged files from input bar
     
@@ -614,8 +653,7 @@ const Helper = () => {
         }
       }      // Debug: log conversation history state      // Use the enhanced prompt as current message
       const currentPrompt = messageContent || `Please analyze the ${filesForGemini.length > 0 ? 'uploaded files' : 'previous context'} and provide insights.`;
-        
-      // Use the new conversation history method if there's history, otherwise fall back to the original method
+          // Use the new conversation history method if there's history, otherwise fall back to the original method
       // IMPORTANT: Image generation models don't support conversation history, so always use generateContent for them
       const response = (cleanedHistory.length > 0 && !selectedModel.supportsImageGeneration) 
         ? await geminiService.generateContentWithHistory(
@@ -625,7 +663,8 @@ const Helper = () => {
             filesForGemini.length > 0 ? filesForGemini : undefined,
             selectedModel,
             filesForThisMessage.length > 0 ? filesForThisMessage : undefined, // Pass raw files for OpenRouter
-            isThinkingMode // Enable thinking mode via API
+            isThinkingMode, // Enable thinking mode via API
+            controller.signal // Pass abort signal
           )
         : await geminiService.generateContent(
             currentPrompt,
@@ -633,8 +672,9 @@ const Helper = () => {
             filesForGemini.length > 0 ? filesForGemini : undefined,
             selectedModel,
             filesForThisMessage.length > 0 ? filesForThisMessage : undefined, // Pass raw files for OpenRouter
-            isThinkingMode // Enable thinking mode via API
-          );      // Process response based on thinking mode
+            isThinkingMode, // Enable thinking mode via API
+            controller.signal // Pass abort signal
+          );// Process response based on thinking mode
       if (isThinkingMode) {
         // Parse thinking mode response to separate thinking process from final answer
         const parsed = parseThinkingResponse(response);
@@ -779,10 +819,13 @@ const Helper = () => {
     // Remove the last assistant message
     const newMessages = messages.slice(0, lastAssistantIndex);
     setMessages(newMessages);
-    
-    // Set up the regeneration
+      // Set up the regeneration
     const regenerateMessage = async () => {
       setIsProcessing(true);
+      
+      // Create abort controller for this regeneration
+      const controller = new AbortController();
+      setAbortController(controller);
       
       // Create new assistant message placeholder
       const assistantMessageId = crypto.randomUUID();
@@ -848,8 +891,7 @@ const Helper = () => {
           );
         }        const currentPrompt = lastUserMessage.content || `Please analyze the ${filesForGemini.length > 0 ? 'uploaded files' : 'previous context'} and provide insights.`;
         const systemPrompt = (lastUserMessage.agent || selectedAgent).systemPrompt; // Use normal agent prompt - thinking handled by API
-        const modelToUse = lastUserMessage.model || selectedModel;
-          // Generate response
+        const modelToUse = lastUserMessage.model || selectedModel;        // Generate response
         // IMPORTANT: Image generation models don't support conversation history, so always use generateContent for them
         const response = (cleanedHistory.length > 0 && !modelToUse.supportsImageGeneration) 
           ? await geminiService.generateContentWithHistory(
@@ -859,7 +901,8 @@ const Helper = () => {
               filesForGemini.length > 0 ? filesForGemini : undefined,
               modelToUse,
               lastUserMessage.files || undefined,
-              isThinkingMode // Enable thinking mode via API
+              isThinkingMode, // Enable thinking mode via API
+              controller.signal
             )
           : await geminiService.generateContent(
               currentPrompt,
@@ -867,8 +910,9 @@ const Helper = () => {
               filesForGemini.length > 0 ? filesForGemini : undefined,
               modelToUse,
               lastUserMessage.files || undefined,
-              isThinkingMode // Enable thinking mode via API
-            );        // Process response based on thinking mode
+              isThinkingMode, // Enable thinking mode via API
+              controller.signal
+            );// Process response based on thinking mode
         if (isThinkingMode) {
           const parsed = parseThinkingResponse(response);
           
@@ -941,14 +985,14 @@ const Helper = () => {
                 error: error instanceof Error ? error.message : 'Unknown error'
               }
             : msg
-        ));
-        toast({
+        ));        toast({
           title: "Regeneration Failed",
           description: error instanceof Error ? error.message : "An error occurred during regeneration.",
           variant: "destructive",
         });
       } finally {
         setIsProcessing(false);
+        setAbortController(null);
       }
     };
 
@@ -1145,13 +1189,10 @@ const Helper = () => {
               const agent = HELPER_AGENTS.find(a => a.id === value);
               if (agent) setSelectedAgent(agent);
             }}
-          >
-            <SelectTrigger className="w-auto h-9 text-xs sm:text-sm px-2 sm:px-3 min-w-[120px] max-w-[200px]">
+          >            <SelectTrigger className="w-auto h-9 text-xs sm:text-sm px-2 sm:px-3 min-w-[120px] max-w-[200px]">
               <div className="flex items-center gap-1.5 truncate">
                 {React.createElement(getAgentIcon(selectedAgent.icon), { className: "h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0"})}
-                <span className="truncate hidden sm:inline">{selectedAgent.name}</span>
-                <span className="truncate sm:hidden">Agent</span>
-
+                <span className="truncate">{selectedAgent.name}</span>
               </div>
             </SelectTrigger>
             <SelectContent>
@@ -1274,10 +1315,14 @@ const Helper = () => {
             </div>
           ) : (
             <div className="space-y-6 pt-6"> {/* Added pt-6 */}
-              {messages.map((message) => (                <div key={message.id} className="group">                  <div className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'} items-start`}>
-                    {message.type === 'assistant' && (message.isLoading || message.isThinking) && (
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mt-1">
-                        <ThinkingAnimation variant="pulse" text="" size="sm" className="justify-center" />
+              {messages.map((message) => (                <div key={message.id} className="group">                  <div className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'} items-start`}>                    {message.type === 'assistant' && (message.isLoading || message.isThinking) && (
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-r from-primary/20 to-primary/10 flex items-center justify-center mt-1 border border-primary/20">
+                        <div className="relative">
+                          <Bot className="h-4 w-4 text-primary animate-pulse" />
+                          <div className="absolute inset-0 animate-ping">
+                            <Bot className="h-4 w-4 text-primary opacity-30" />
+                          </div>
+                        </div>
                       </div>
                     )}
                     
@@ -1288,17 +1333,16 @@ const Helper = () => {
                           ? 'bg-primary text-primary-foreground ml-auto' // Removed ml-12, rely on justify-end
                           : 'bg-muted'
                       )}>                        {message.isLoading ? (
-                          <ThinkingAnimation 
-                            variant={message.isThinkingMode ? "brain" : "dots"}
-                            text={message.isThinkingMode ? 'Thinking...' : 'Processing...'}
-                            size="md"
-                          />
-                        ) : message.isThinking ? (                          <div className="space-y-2">
-                            <ThinkingAnimation 
-                              variant="brain"
-                              text="Thinking..."
-                              size="sm"
-                            />
+                          <div className="flex items-center gap-2">
+                            <Bot className="h-4 w-4 text-primary animate-spin" style={{ animationDuration: '2s' }} />
+                            <span className="text-sm text-muted-foreground">
+                              {message.isThinkingMode ? 'Thinking...' : 'Generating response...'}
+                            </span>
+                          </div>                        ) : message.isThinking ? (<div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Brain className="h-4 w-4 text-primary animate-pulse" />
+                              <span className="text-sm text-muted-foreground">Thinking process</span>
+                            </div>
                             <div className="bg-muted/50 border border-border/30 rounded-lg p-3">
                               <div className="whitespace-pre-wrap text-sm leading-relaxed break-words text-muted-foreground">
                                 {cleanResponseFormatting(message.thinkingProcess)}
@@ -1309,18 +1353,17 @@ const Helper = () => {
                           <div className="space-y-3">                            {/* Show thinking process only when actively thinking */}
                             {message.isThinkingMode && message.thinkingProcess && message.isThinking && (
                               <div className="space-y-2">
-                                <ThinkingAnimation 
-                                  variant="brain"
-                                  text="Thinking process"
-                                  size="sm"
-                                />
+                                <div className="flex items-center gap-2">
+                                  <Brain className="h-4 w-4 text-primary animate-pulse" />
+                                  <span className="text-sm text-muted-foreground">Thinking process</span>
+                                </div>
                                 <div className="bg-muted/50 border border-border/30 rounded-lg p-3">
                                   <div className="whitespace-pre-wrap text-sm leading-relaxed break-words text-muted-foreground">
                                     {cleanResponseFormatting(message.thinkingProcess)}
                                   </div>
                                 </div>
                               </div>
-                            )}                              {/* Main content (final answer in reasoning mode, or full content otherwise) */}
+                            )}{/* Main content (final answer in reasoning mode, or full content otherwise) */}
                             <div className="space-y-2">
                               {(() => {
                                 const contentToRender = message.isThinkingMode ? (message.finalAnswer || message.content) : message.content;
@@ -1331,15 +1374,7 @@ const Helper = () => {
                                     content={contentToRender}
                                   />
                                 );
-                              })()}
-                            </div>
-                              {/* Show reasoning mode indicator for assistant messages (legacy support) */}
-                            {message.type === 'assistant' && !message.isThinkingMode && (message.content.includes('🧠 Reasoning Process:') || message.content.includes('🧠 AI Response (Reasoning Mode):')) && (
-                              <div className="flex items-center gap-1.5 text-xs text-primary/70 bg-primary/5 px-2 py-1 rounded">
-                                <Brain className="h-3 w-3" />
-                                <span>Reasoning Mode Response</span>
-                              </div>
-                            )}
+                              })()}                            </div>
                             
                             {message.files && message.files.length > 0 && (
                               <div className="space-y-2 border-t border-border/50 pt-3 mt-3">
@@ -1383,36 +1418,68 @@ const Helper = () => {
                                   size="icon"
                                   onClick={regenerateLastResponse}
                                   disabled={isProcessing}
-                                  className="h-6 w-6"                                  title="Regenerate response"
+                                  className="h-6 w-6"
+                                  title="Regenerate response"
                                 >
                                   {isProcessing ? (
                                     <Loader2 className="h-3 w-3 animate-spin" />
                                   ) : (
                                     <RotateCcw className="h-3 w-3" />
                                   )}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={exportLatestResponseAsPDF}
-                                  className="h-6 w-6"
-                                  title="Export as PDF"
-                                >
-                                  <Download className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={exportLatestResponseAsDOCX}
-                                  className="h-6 w-6"
-                                  title="Export as DOCX"
-                                >
-                                  <FileText className="h-3 w-3" />
-                                </Button>
+                                </Button>                                {/* Check if this is an image generation model and show appropriate download */}
+                                {message.model?.supportsImageGeneration && 
+                                 message.content && 
+                                 (message.content.includes('![') || message.content.includes('<img') || message.content.includes('data:image/')) ? (
+                                  // Show image download for image generation
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      // Extract and download image from message content
+                                      const imgMatch = message.content.match(/!\[.*?\]\((.*?)\)|<img.*?src="(.*?)"/);
+                                      if (imgMatch) {
+                                        const imageUrl = imgMatch[1] || imgMatch[2];
+                                        const link = document.createElement('a');
+                                        link.href = imageUrl;
+                                        link.download = `generated-image-${Date.now()}.png`;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                      }
+                                    }}
+                                    className="h-6 w-6"
+                                    title="Download generated image"
+                                  >
+                                    <Download className="h-3 w-3" />
+                                  </Button>
+                                ) : (
+                                  // Show PDF/DOCX export for text responses
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={exportLatestResponseAsPDF}
+                                      className="h-6 w-6"
+                                      title="Export as PDF"
+                                    >
+                                      <Download className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={exportLatestResponseAsDOCX}
+                                      className="h-6 w-6"
+                                      title="Export as DOCX"
+                                    >
+                                      <FileText className="h-3 w-3" />
+                                    </Button>
+                                  </>
+                                )}
                               </>
                             )}
                           </>
-                        )}{message.agent && (
+                        )}
+                        {message.agent && (
                           <Badge variant="outline" className="text-xs px-1.5 py-0.5 font-normal">
                             {React.createElement(getAgentIcon(message.agent.icon), { className: "h-3 w-3 mr-1 inline-block" })}
                             {message.agent.name}
@@ -1456,10 +1523,10 @@ const Helper = () => {
                   <span>Uploading... ({uploadProgress.toFixed(0)}%)</span>
                 </div>
               )}
-            </div>          )}          {/* Thinking Mode Indicator */}
-          {isThinkingMode && (
+            </div>          )}          {/* Thinking Mode Indicator */}          {isThinkingMode && (
             <div className="mb-2 flex items-center gap-2 p-2 bg-primary/10 rounded-md border border-primary/20">
-              <ThinkingAnimation variant="brain" text="Thinking Mode Active" size="sm" />
+              <Brain className="h-4 w-4 text-primary animate-pulse" />
+              <span className="text-sm font-medium text-primary">Thinking Mode Active</span>
               <span className="text-xs text-primary/70">AI will show step-by-step thinking process</span>
             </div>
           )}
@@ -1477,40 +1544,32 @@ const Helper = () => {
                 <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
               ) : (
                 <Paperclip className="h-4 w-4 sm:h-5 sm:w-5" />
-              )}
-            </Button>
+              )}            </Button>
             
-            <Button
-              variant={isThinkingMode ? "default" : "ghost"}
-              size="icon"
-              onClick={() => {
-                if (!supportsThinking(selectedModel)) {
-                  toast({
-                    title: "Thinking mode not supported",
-                    description: "Thinking mode only works with Gemini 2.5 series models. Please select a compatible model.",
-                    variant: "destructive"
-                  });
-                  return;
-                }
-                setIsThinkingMode(!isThinkingMode);
-              }}
-              disabled={isProcessing}
-              className={cn(                "h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0",
-                isThinkingMode 
-                  ? "bg-primary text-primary-foreground hover:bg-primary/90" 
-                  : "text-muted-foreground hover:text-primary",
-                !supportsThinking(selectedModel) && "opacity-50"
-              )}
-              title={
-                !supportsThinking(selectedModel) 
-                  ? "Thinking mode requires Gemini 2.5 series models" 
-                  : isThinkingMode 
+            {/* Thinking Mode Button - Only show for compatible models */}
+            {supportsThinking(selectedModel) && (
+              <Button
+                variant={isThinkingMode ? "default" : "ghost"}
+                size="icon"
+                onClick={() => {
+                  setIsThinkingMode(!isThinkingMode);
+                }}
+                disabled={isProcessing}
+                className={cn(
+                  "h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0",
+                  isThinkingMode 
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90" 
+                    : "text-muted-foreground hover:text-primary"
+                )}
+                title={
+                  isThinkingMode 
                     ? "Thinking mode enabled - AI will show step-by-step thinking" 
                     : "Enable thinking mode"
-              }
-            >
-              <Brain className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Button>
+                }
+              >
+                <Brain className="h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
+            )}
             
             <Textarea
               value={currentMessage}
@@ -1520,29 +1579,20 @@ const Helper = () => {
               className="flex-1 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 resize-none min-h-[24px] max-h-[120px] self-center py-2 sm:py-2.5 px-2 text-sm sm:text-base placeholder:text-muted-foreground/70"
               disabled={isProcessing || isUploading}
               rows={1}            />
-            {isProcessing && abortController && (
-              <Button
-                onClick={stopGeneration}
-                className="h-9 w-9 sm:h-10 sm:w-10 p-0 flex-shrink-0 rounded-lg mr-2"
-                size="icon"
-                variant="destructive"
-                title="Stop generation"
-              >
-                <Square className="h-4 w-4 sm:h-5 sm:w-5" />
-              </Button>
-            )}
             <Button
-              onClick={sendMessage}
-              disabled={(!currentMessage.trim() && uploadedFiles.length === 0) || isProcessing || !isServiceInitialized || isUploading}
-              className="h-9 w-9 sm:h-10 sm:w-10 p-0 flex-shrink-0 rounded-lg"
+              onClick={isProcessing && abortController ? stopGeneration : sendMessage}
+              disabled={!isProcessing && ((!currentMessage.trim() && uploadedFiles.length === 0) || !isServiceInitialized || isUploading)}
+              className={`h-9 w-9 sm:h-10 sm:w-10 p-0 flex-shrink-0 rounded-lg ${isProcessing && abortController ? 'bg-destructive hover:bg-destructive/90' : ''}`}
               size="icon"
-              title="Send message"
+              title={isProcessing && abortController ? "Stop generation" : "Send message"}
             >
-              {isProcessing ? (
+              {isProcessing && abortController ? (
+                <Square className="h-4 w-4 sm:h-5 sm:w-5" />
+              ) : isProcessing ? (
                 <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
               ) : (
                 <Send className="h-4 w-4 sm:h-5 sm:w-5" />
-              )}            </Button>
+              )}</Button>
           </div>
           
           {/* User Guidance Reminder */}
