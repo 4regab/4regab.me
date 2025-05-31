@@ -1,4 +1,4 @@
-# 🚀 AI-Powered Multi-Tool Platform
+# 🚀 My Projects and AI-powered tools
 
 > A comprehensive suite of AI-powered tools built with React, TypeScript, and Google's Gemini AI. Features include an intelligent chat assistant, AI translator, text-to-speech converter, and more productivity tools.
 
@@ -42,6 +42,7 @@
 ## 🔴 Live Deployment
 
 - **🏠 Main Portfolio**: [4regab.me](https://4regab.me)
+- **💬 Chat**: [chat.4regab.me](https://chat.4regab.me)
 - **🛠️ Tools Hub**: [tools.4regab.me](https://tools.4regab.me)
 - **🌐 AI Translator**: [translator.4regab.me](https://translator.4regab.me)
 - **🔊 Text-to-Speech**: [tts.4regab.me](https://tts.4regab.me)
