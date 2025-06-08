@@ -32,6 +32,11 @@ function checkRateLimit(req: VercelRequest): { allowed: boolean; resetIn?: numbe
 }
 
 const handler = async (req: VercelRequest, res: VercelResponse) => {
+  // Set CORS headers for all responses from this function
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return res.status(200).json({ success: true });
