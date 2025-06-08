@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { BackendService } from "@/lib/backend-service";
 
 const Translator = () => {
   const [inputText, setInputText] = useState("");
@@ -47,61 +48,50 @@ const Translator = () => {
     let currentRetry = 0;
     
     const attemptTranslation = async (): Promise<void> => {
-      try {
-        // Check rate limiting before making request
+      try {        // Check rate limiting before making request
         checkRateLimit();
         
-        // Call our backend API instead of Gemini directly
-        const response = await fetch('/api/translate', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            text: inputText.trim()
-          })
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          
-          if (response.status === 429) {
-            if (currentRetry < MAX_RETRIES) {
-              // Exponential backoff: 5s, 10s, 20s
-              const backoffTime = errorData.resetIn ? errorData.resetIn * 1000 : 5000 * Math.pow(2, currentRetry);
-              throw new Error(`RETRY_AFTER:${backoffTime}`);
-            } else {
-              throw new Error(errorData.message || 'Rate limit exceeded. Please try again later.');
-            }
-          } else if (response.status === 400) {
-            throw new Error(errorData.message || 'Invalid request. Please check your input text and try again.');
-          } else if (response.status === 500) {
-            throw new Error(errorData.message || 'Translation service is temporarily unavailable. Please try again later.');
-          } else {
-            throw new Error(errorData.message || `Service Error: ${response.status} ${response.statusText}`);
-          }
-        }
-
-        const data = await response.json();
-        
-        if (data.success && data.translation) {
-          setTranslatedText(data.translation);
-          setRetryCount(0); // Reset retry count on success
-        } else {
-          throw new Error("Translation failed - no output received from service");
-        }
+        // Use the backend service for translation
+        const response = await BackendService.translate({
+          text: inputText.trim(),
+          targetLanguage: 'Filipino',
+          sourceLanguage: 'auto'
+        });        setTranslatedText(response.translatedText);
+        setRetryCount(0); // Reset retry count on success
       } catch (err) {
-        if (err instanceof Error && err.message.startsWith('RETRY_AFTER:')) {
-          const backoffTime = parseInt(err.message.split(':')[1]);
-          currentRetry++;
-          setRetryCount(currentRetry);
-          
-          setError(`Service overloaded. Retrying in ${backoffTime / 1000} seconds... (Attempt ${currentRetry}/${MAX_RETRIES})`);
-          
-          await sleep(backoffTime);
-          return attemptTranslation();
+        if (err instanceof Error) {
+          // Handle rate limiting and retry logic
+          if (err.message.includes('Rate limit') || err.message.includes('429')) {
+            if (currentRetry < MAX_RETRIES) {
+              currentRetry++;
+              setRetryCount(currentRetry);
+              
+              const backoffTime = 5000 * Math.pow(2, currentRetry - 1); // 5s, 10s
+              setError(`Rate limit exceeded. Retrying in ${backoffTime / 1000} seconds... (Attempt ${currentRetry}/${MAX_RETRIES})`);
+              
+              await sleep(backoffTime);
+              return attemptTranslation();
+            } else {
+              throw new Error('Rate limit exceeded. Please try again later.');
+            }
+          } else if (err.message.includes('timeout')) {
+            if (currentRetry < MAX_RETRIES) {
+              currentRetry++;
+              setRetryCount(currentRetry);
+              
+              const backoffTime = 3000 * currentRetry; // 3s, 6s
+              setError(`Request timeout. Retrying in ${backoffTime / 1000} seconds... (Attempt ${currentRetry}/${MAX_RETRIES})`);
+              
+              await sleep(backoffTime);
+              return attemptTranslation();
+            } else {
+              throw new Error('Translation service is not responding. Please try again later.');
+            }
+          } else {
+            throw err;
+          }
         } else {
-          throw err;
+          throw new Error('An unexpected error occurred during translation');
         }
       }
     };

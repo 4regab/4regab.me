@@ -1,19 +1,21 @@
 {
-  "functions": {
-    "api/chat.ts": {
-      "maxDuration": 60
-    },
-    "api/translate.ts": {
-      "maxDuration": 30
-    },
-    "api/tts.ts": {
-      "maxDuration": 30
+  "version": 2,
+  "builds": [
+    {
+      "src": "dist/**",
+      "use": "@vercel/static"
     }
-  },
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/dist/$1"
+    }
+  ],
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }

@@ -5,9 +5,12 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import helmet from 'helmet';
 
-// Load environment variables
+// Load environment variables - try multiple locations
+dotenv.config({ path: '.env' });
 dotenv.config({ path: '.env.local' });
+dotenv.config({ path: '.env.production' });
 
 // For ES modules compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -58,19 +61,60 @@ const ttsRateLimit = rateLimit({
   legacyHeaders: false,
 });
 
-// CORS configuration
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https://generativelanguage.googleapis.com"],
+    },
+  },
+  crossOriginEmbedderPolicy: false
+}));
+
+// CORS configuration for production and development
+const allowedOrigins = process.env.NODE_ENV === 'production' 
+  ? [
+      'https://4regab.me', 
+      'https://www.4regab.me',
+      'https://4regab.vercel.app',
+      'https://4regab-ai-tools.vercel.app'
+    ] 
+  : [
+      'http://localhost:3000', 
+      'http://localhost:5173',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:5173'
+    ];
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://4regab.me', 'https://www.4regab.me'] 
-    : ['http://localhost:3000', 'http://localhost:5173'],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // In development, be more permissive
+    if (process.env.NODE_ENV !== 'production' && origin.includes('localhost')) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+  optionsSuccessStatus: 200
 }));
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve static files from the React app build
 app.use(express.static(path.join(__dirname, '../../dist')));
@@ -139,23 +183,8 @@ app.post('/api/translate', translateRateLimit, async (req, res) => {
         error: 'Service configuration error',
         message: 'Translation service is not properly configured'
       });
-    }
-
-    const primaryModel = 'gemini-2.5-flash-preview-05-20';
-    const fallbackModel = 'gemini-2.0-flash-experimental'; // As per gemini-models.ts, though 'gemini-1.5-flash-latest' was used before. Let's stick to the defined fallback.
-                                                       // If 'gemini-2.0-flash-experimental' is not the intended fallback, this should be adjusted.
-                                                       // For now, using 'gemini-1.5-flash-latest' as it was previously in the code.
-                                                       // Re-evaluating: The request was to fallback to "Gemini 2.0 Flash Experimental".
-                                                       // The file `gemini-models.ts` has `gemini-2.0-flash` and `gemini-2.0-flash-lite`.
-                                                       // Let's assume "Gemini 2.0 Flash Experimental" refers to `gemini-1.5-flash-latest` or a similar experimental/latest tag.
-                                                       // Given the previous code used `gemini-1.5-flash-latest`, and the new primary is `gemini-2.5-flash-preview-05-20`,
-                                                       // a reasonable fallback would be `gemini-1.5-flash-latest` or simply `gemini-1.5-flash`.
-                                                       // The user specifically mentioned "Gemini 2.0 Flash Experimental".
-                                                       // Let's use 'gemini-1.5-flash-latest' as a stable fallback if 'gemini-2.0-flash-experimental' isn't a direct model name.
-                                                       // The most appropriate available model from gemini-models.ts that seems like an "experimental" or "latest" version of 1.5/2.0 flash is 'gemini-1.5-flash-latest'.
-                                                       // The user explicitly asked for "Gemini 2.0 Flash Experimental".
-                                                       // From `gemini-models.ts`, we have `gemini-2.0-flash`. This seems the closest non-preview 2.0 flash model.
-                                                       // Let's use `gemini-2.0-flash` as the fallback.
+    }    const primaryModel = 'gemini-2.0-flash-experimental';
+    const fallbackModel = 'gemini-1.5-flash';
 
     let modelToUse = primaryModel;
     let attempt = 1;

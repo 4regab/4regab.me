@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Paperclip, Send, Trash2, Settings2, Info, X, Bot, User, AlertTriangle, CheckCircle2, Loader2, FileType, Copy, Upload, Brain, Zap, Square, Download, FileText, RotateCcw } from 'lucide-react';
 import { GEMINI_MODELS, getDefaultModel, getModelById, getModelConfig } from '@/lib/gemini-models';
 import { HELPER_AGENTS, getAgentById, getAgentIcon } from '@/lib/helper-agents';
-import geminiService from '@/lib/gemini-service';
+import { BackendService } from '@/lib/backend-service';
 import { ExportService } from '@/lib/export-service';
 import MessageContent from '@/components/ui/message-content';
 // import { ragService, type DocumentChunk, type RAGContext } from '@/lib/rag-service'; // Removed RAG
