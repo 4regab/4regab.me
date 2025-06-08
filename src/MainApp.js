@@ -1,0 +1,15 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Index from "./pages/Index";
+import Tools from "./pages/Tools";
+import TranslatorPage from "./pages/tools/TranslatorPage";
+import TextToSpeechPage from "./pages/tools/TextToSpeechPage";
+import HelperPage from "./pages/tools/HelperPage";
+import NotFound from "./pages/NotFound";
+const queryClient = new QueryClient();
+const MainApp = () => (_jsx(QueryClientProvider, { client: queryClient, children: _jsxs(TooltipProvider, { children: [_jsx(Toaster, {}), _jsx(Sonner, {}), _jsx(BrowserRouter, { children: _jsxs(Routes, { children: [_jsx(Route, { path: "/", element: _jsx(Index, {}) }), _jsx(Route, { path: "/tools", element: _jsx(Tools, {}) }), _jsx(Route, { path: "/tools/translator", element: _jsx(TranslatorPage, {}) }), _jsx(Route, { path: "/tools/text-to-speech", element: _jsx(TextToSpeechPage, {}) }), _jsx(Route, { path: "/tools/helper", element: _jsx(HelperPage, {}) }), _jsx(Route, { path: "*", element: _jsx(NotFound, {}) })] }) })] }) }));
+export default MainApp;

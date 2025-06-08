@@ -642,7 +642,8 @@ const TextToSpeech = () => {
                     {showAdvancedSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </Button>
                   
-                  {showAdvancedSettings && (                    <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto pr-2">
+                  {showAdvancedSettings && (
+                    <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto pr-2">
                       {VOICE_OPTIONS.slice(2).map((voice) => (
                         <button
                           key={voice.name}
