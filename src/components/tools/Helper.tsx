@@ -5,12 +5,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast as sonnerToast } from 'sonner';
 import { useToast } from '@/hooks/use-toast';
-import { Paperclip, Send, Trash2, Settings2, Info, X, Bot, User, AlertTriangle, CheckCircle2, ExternalLink, Key, Settings, Loader2, FileType, Copy, Upload, Brain, Zap, Square, Download, FileText, RotateCcw } from 'lucide-react';
+import { Paperclip, Send, Trash2, Settings2, Info, X, Bot, User, AlertTriangle, CheckCircle2, Loader2, FileType, Copy, Upload, Brain, Zap, Square, Download, FileText, RotateCcw } from 'lucide-react';
 import { GEMINI_MODELS, getDefaultModel, getModelById, getModelConfig } from '@/lib/gemini-models';
 import { HELPER_AGENTS, getAgentById, getAgentIcon } from '@/lib/helper-agents';
 import geminiService from '@/lib/gemini-service';
@@ -222,13 +222,8 @@ const Helper = () => {
   
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-    // API Key Management
-  const [geminiApiKey, setGeminiApiKey] = useState<string>('');
-  const [openRouterApiKey, setOpenRouterApiKey] = useState<string>('');
-  const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
-  const [geminiApiKeyInput, setGeminiApiKeyInput] = useState('');
-  const [openRouterApiKeyInput, setOpenRouterApiKeyInput] = useState('');
-  const [isServiceInitialized, setIsServiceInitialized] = useState(false);
+  // Service state (no longer needs API key management)
+  const [isServiceInitialized] = useState(true); // Always initialized since we use serverless functions
   
   // Reasoning Mode
   const [isThinkingMode, setIsThinkingMode] = useState(false);
@@ -240,31 +235,12 @@ const Helper = () => {
   //   totalChunks: 0,
   //   totalSources: 0,
   //   sources: []
-  // });
-  // Load chat history and API keys from localStorage on component mount
+  // });  // Load chat history from localStorage on component mount
   useEffect(() => {
-    const savedGeminiApiKey = localStorage.getItem('gemini_api_key');
-    const savedOpenRouterApiKey = localStorage.getItem('openrouter_api_key');
-    
-    if (savedGeminiApiKey) {
-      setGeminiApiKey(savedGeminiApiKey);
-      try {
-        geminiService.initialize(savedGeminiApiKey, savedOpenRouterApiKey || '');
-        setIsServiceInitialized(true);
-      } catch (error) {
-        console.error('Failed to initialize service with saved API keys:', error);
-        localStorage.removeItem('gemini_api_key');
-      }
-    }
-    
-    if (savedOpenRouterApiKey) {
-      setOpenRouterApiKey(savedOpenRouterApiKey);
-    }
-
     const savedMessages = localStorage.getItem(LOCAL_STORAGE_CHAT_HISTORY_KEY);
     if (savedMessages) {
       try {
-        const parsedMessages: ChatMessage[] = JSON.parse(savedMessages).map((msg: any) => ({
+        const parsedMessages: ChatMessage[] = JSON.parse(savedMessages).map((msg: ChatMessage) => ({
           ...msg,
           timestamp: new Date(msg.timestamp) // Ensure timestamp is a Date object
         }));
@@ -296,67 +272,7 @@ const Helper = () => {
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-  // Handle API key submission
-  const handleApiKeySubmit = useCallback(() => {
-    // Validate API keys based on selected model
-    const needsGemini = selectedModel.provider === 'google' || !selectedModel.provider;
-    const needsOpenRouter = selectedModel.provider === 'openrouter';
-    
-    if (needsGemini && !geminiApiKeyInput.trim()) {
-      toast({
-        title: "Gemini API Key Required",
-        description: "Please enter a valid Gemini API key for Google models.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (needsOpenRouter && !openRouterApiKeyInput.trim()) {
-      toast({
-        title: "OpenRouter API Key Required", 
-        description: "Please enter a valid OpenRouter API key for OpenRouter models.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const geminiKey = geminiApiKeyInput.trim();
-      const openRouterKey = openRouterApiKeyInput.trim();
-      
-      geminiService.initialize(geminiKey, openRouterKey);
-      
-      if (geminiKey) {
-        setGeminiApiKey(geminiKey);
-        localStorage.setItem('gemini_api_key', geminiKey);
-      }
-      
-      if (openRouterKey) {
-        setOpenRouterApiKey(openRouterKey);
-        localStorage.setItem('openrouter_api_key', openRouterKey);
-      }
-      
-      setIsServiceInitialized(true);
-      setShowApiKeyDialog(false);
-      setGeminiApiKeyInput('');
-      setOpenRouterApiKeyInput('');
-      
-      toast({
-        title: "API Keys Saved",
-        description: "API keys have been saved successfully.",
-      });
-    } catch (error) {
-      console.error('Failed to initialize service:', error);
-      toast({
-        title: "Invalid API Keys",
-        description: "Failed to initialize with the provided API keys. Please check and try again.",
-        variant: "destructive",
-      });
-    }
-  }, [geminiApiKeyInput, openRouterApiKeyInput, selectedModel.provider, toast]);
-  
-  // Function to upload files to Gemini (can be called from onDrop or before sending message)
+  }, [messages]);  // Function to upload files to Gemini (can be called from onDrop or before sending message)
   const uploadFilesToGemini = useCallback(async (filesToUpload: File[]): Promise<GeminiFile[]> => {
     setIsUploading(true);
     setUploadProgress(0);
@@ -428,16 +344,7 @@ const Helper = () => {
       setUploadProgress(0);
     }
     return successfullyUploaded;
-  }, [toast]);
-    const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    if (!isServiceInitialized) {
-      toast({ title: "API Key Required", description: "Please set up your API keys first.", variant: "destructive" });
-      setGeminiApiKeyInput(geminiApiKey); // Populate with current API keys
-      setOpenRouterApiKeyInput(openRouterApiKey);
-      setShowApiKeyDialog(true);
-      return;
-    }
-
+  }, [toast]);  const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const newLocalFiles = [...uploadedFiles, ...acceptedFiles];
     setUploadedFiles(newLocalFiles); // Add to staging files for the input area
 
@@ -445,7 +352,7 @@ const Helper = () => {
     if (acceptedFiles.length > 0) {
       await uploadFilesToGemini(acceptedFiles);
     }
-  }, [uploadedFiles, toast, isServiceInitialized, geminiApiKey, openRouterApiKey, uploadFilesToGemini]);
+  }, [uploadedFiles, uploadFilesToGemini]);
 
   const { getRootProps, getInputProps, isDragActive, open: openFileDialog } = useDropzone({
     onDrop,
@@ -529,17 +436,11 @@ const Helper = () => {
   //     console.error('RAG context generation error:', error);
   //     return null;  //   }
   // }, [ragDocuments]);
-
   const sendMessage = useCallback(async () => {
     if (!currentMessage.trim() && uploadedFiles.length === 0) return;
+    if (isProcessing) return;
 
-    if (!isServiceInitialized) {
-      setGeminiApiKeyInput(geminiApiKey); // Populate with current API keys
-      setOpenRouterApiKeyInput(openRouterApiKey);
-      setShowApiKeyDialog(true);
-      return;
-    }
-    if (isProcessing) return;    // Check if we're trying to send images or videos to a text-only model
+    // Check if we're trying to send images or videos to a text-only model
     const hasMediaFiles = uploadedFiles.some(file => 
       file.type.startsWith('image/') || 
       file.type.startsWith('video/') ||
@@ -566,7 +467,9 @@ const Helper = () => {
         variant: "destructive",
       });
       return;
-    }    setIsProcessing(true);
+    }
+
+    setIsProcessing(true);
     
     // Create abort controller for this generation
     const controller = new AbortController();
@@ -575,23 +478,17 @@ const Helper = () => {
     const messageContent = currentMessage.trim();
     const filesForThisMessage = [...uploadedFiles]; // Files staged in the input bar
     
-    // Get files that are already uploaded to Gemini for this message
-    let filesForGemini: GeminiFile[] = [];
-    if (filesForThisMessage.length > 0) {
-        // Filter gemini files to only include those relevant to this message
-        filesForGemini = geminiUploadedFiles.filter(gf => 
-            filesForThisMessage.some(lf => lf.name === gf.displayName)
-        );
-    }    const userMessage: ChatMessage = {
+    const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       type: 'user',
       content: messageContent || (filesForThisMessage.length > 0 ? `Analyzing ${filesForThisMessage.length} file(s)...` : '...'),
       timestamp: new Date(),
       files: filesForThisMessage.length > 0 ? filesForThisMessage : undefined,
-      rawFiles: filesForThisMessage.length > 0 ? filesForThisMessage : undefined, // Add raw files for OpenRouter
+      rawFiles: filesForThisMessage.length > 0 ? filesForThisMessage : undefined,
     };
 
-    const assistantMessageId = crypto.randomUUID();    const assistantMessagePlaceholder: ChatMessage = {
+    const assistantMessageId = crypto.randomUUID();
+    const assistantMessagePlaceholder: ChatMessage = {
       id: assistantMessageId,
       type: 'assistant',
       content: '',
@@ -599,7 +496,8 @@ const Helper = () => {
       agent: selectedAgent,
       model: selectedModel,
       isLoading: true,
-      isThinkingMode: isThinkingMode,      isThinking: isThinkingMode,
+      isThinkingMode: isThinkingMode,
+      isThinking: isThinkingMode,
       thinkingProcess: '',
       finalAnswer: '',
     };
@@ -610,18 +508,17 @@ const Helper = () => {
     
     try {
       // Build conversation history for multi-turn conversations
-      // Use the messages before adding the current user message
-      const MAX_HISTORY_MESSAGES = 20; // Adjust based on your needs
+      const MAX_HISTORY_MESSAGES = 20;
       const recentMessages = messages
         .filter(msg => 
           !msg.isLoading && 
           !msg.error && 
           !msg.isThinking && 
           msg.content.trim() && 
-          msg.id !== assistantMessageId // Exclude the placeholder assistant message we just added
+          msg.id !== assistantMessageId
         ) 
-        .slice(-MAX_HISTORY_MESSAGES) // Take only the most recent messages
-        .map(msg => {          // For thinking mode messages, use the final answer in history
+        .slice(-MAX_HISTORY_MESSAGES)
+        .map(msg => {
           const contentToUse = msg.isThinkingMode && msg.finalAnswer 
             ? msg.finalAnswer 
             : msg.content;
@@ -631,53 +528,62 @@ const Helper = () => {
             parts: [{ text: contentToUse }]
           };
         })
-        .filter(msg => msg.parts[0].text.trim()); // Ensure no empty content
+        .filter(msg => msg.parts[0].text.trim());
       
       // Ensure the conversation alternates properly and starts with 'user'
       const cleanedHistory = [];
       let lastRole = null;
       
       for (const msg of recentMessages) {
-        // Skip consecutive messages from the same role to maintain alternation
         if (msg.role !== lastRole) {
           cleanedHistory.push(msg);
           lastRole = msg.role;
         }
       }
       
-      // Ensure the first message in history is from 'user' if history exists
       if (cleanedHistory.length > 0 && cleanedHistory[0].role !== 'user') {
-        // Remove messages from the beginning until we find a user message or have no messages left
         while (cleanedHistory.length > 0 && cleanedHistory[0].role !== 'user') {
           cleanedHistory.shift();
         }
-      }      // Debug: log conversation history state      // Use the enhanced prompt as current message
-      const currentPrompt = messageContent || `Please analyze the ${filesForGemini.length > 0 ? 'uploaded files' : 'previous context'} and provide insights.`;
-          // Use the new conversation history method if there's history, otherwise fall back to the original method
-      // IMPORTANT: Image generation models don't support conversation history, so always use generateContent for them
-      const response = (cleanedHistory.length > 0 && !selectedModel.supportsImageGeneration) 
-        ? await geminiService.generateContentWithHistory(
-            currentPrompt,
-            selectedAgent.systemPrompt, // Use normal agent prompt - thinking is handled by API
-            cleanedHistory,
-            filesForGemini.length > 0 ? filesForGemini : undefined,
-            selectedModel,
-            filesForThisMessage.length > 0 ? filesForThisMessage : undefined, // Pass raw files for OpenRouter
-            isThinkingMode, // Enable thinking mode via API
-            controller.signal // Pass abort signal
-          )
-        : await geminiService.generateContent(
-            currentPrompt,
-            selectedAgent.systemPrompt, // Use normal agent prompt - thinking is handled by API
-            filesForGemini.length > 0 ? filesForGemini : undefined,
-            selectedModel,
-            filesForThisMessage.length > 0 ? filesForThisMessage : undefined, // Pass raw files for OpenRouter
-            isThinkingMode, // Enable thinking mode via API
-            controller.signal // Pass abort signal
-          );// Process response based on thinking mode
+      }
+
+      const currentPrompt = messageContent || `Please analyze the ${filesForThisMessage.length > 0 ? 'uploaded files' : 'previous context'} and provide insights.`;
+      
+      // Call the serverless function instead of direct API
+      const requestBody = {
+        prompt: currentPrompt,
+        systemPrompt: selectedAgent.systemPrompt,
+        conversationHistory: cleanedHistory.length > 0 ? cleanedHistory : undefined,
+        model: selectedModel.modelName || 'gemini-2.5-flash-preview-05-20',
+        enableThinking: isThinkingMode
+      };
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to generate response');
+      }
+
+      const responseText = data.content || data.response || '';
+
+      // Process response based on thinking mode
       if (isThinkingMode) {
         // Parse thinking mode response to separate thinking process from final answer
-        const parsed = parseThinkingResponse(response);
+        const parsed = parseThinkingResponse(responseText);
         
         // First, stop the loading state and start showing thinking process
         setMessages(prev => prev.map(msg => 
@@ -734,21 +640,13 @@ const Helper = () => {
         }
       } else {
         // Clean up unnecessary asterisks in regular mode
-        const cleanedResponse = cleanResponseFormatting(response);
+        const cleanedResponse = cleanResponseFormatting(responseText);
         
         setMessages(prev => prev.map(msg => 
           msg.id === assistantMessageId 
             ? { ...msg, content: cleanedResponse, isLoading: false }
             : msg
         ));
-      }
-      
-      // Clean up used files from geminiUploadedFiles
-      if (filesForGemini.length > 0) {
-        setGeminiUploadedFiles(prevGeminiFiles => 
-            prevGeminiFiles.filter(gf => !filesForGemini.some(usedFile => usedFile.name === gf.name))        );
-        // Delete them from Gemini service
-        filesForGemini.forEach(gf => geminiService.deleteFile(gf.name).catch(console.error));
       }
 
     } catch (error) {
@@ -757,33 +655,32 @@ const Helper = () => {
         msg.id === assistantMessageId 
           ? { 
               ...msg, 
-              content: 'Sorry, I encountered an error. Please check your API key, input, and try again.',
+              content: 'Sorry, I encountered an error while processing your request. Please try again.',
               isLoading: false,
               error: error instanceof Error ? error.message : 'Unknown error'
             }
           : msg
       ));
+      
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
       toast({
         title: "Processing Failed",
-        description: error instanceof Error ? error.message : "An error occurred.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
+      setAbortController(null);
     }
   }, [
     currentMessage, 
     uploadedFiles, 
-    geminiUploadedFiles, 
     selectedAgent, 
-    selectedModel,    isServiceInitialized, 
+    selectedModel,
     isProcessing, 
     toast, 
-    geminiApiKey, 
-    openRouterApiKey, 
     isThinkingMode, 
-    messages
-  ]);
+    messages  ]);
   // Function to regenerate the last response
   const regenerateLastResponse = useCallback(() => {
     if (isProcessing) return;
@@ -1256,48 +1153,16 @@ const Helper = () => {
               ))}            </SelectContent>
           </Select>
         </div>
-        
-        <div className="flex items-center gap-1 sm:gap-2">
-          {!isServiceInitialized && (             <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setGeminiApiKeyInput(geminiApiKey); // Populate with current API keys
-                  setOpenRouterApiKeyInput(openRouterApiKey);
-                  setShowApiKeyDialog(true);
-                }}
-                className="h-9 px-2 sm:px-3 text-xs sm:text-sm border-yellow-500/50 text-yellow-600 hover:bg-yellow-500/10 hover:text-yellow-500"
-              >
-                <Key className="mr-0 sm:mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                <span className="hidden sm:inline">Set API Keys</span>
-              </Button>
-          )}          {isServiceInitialized && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  setGeminiApiKeyInput(geminiApiKey); // Populate with current API keys
-                  setOpenRouterApiKeyInput(openRouterApiKey);
-                  setShowApiKeyDialog(true);
-                }}
-                className="h-9 w-9 text-muted-foreground hover:text-foreground"
-                title="API Key Settings"
-              >
-                <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
-              </Button>
-              
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={clearConversation}
-                className="h-9 w-9 text-muted-foreground hover:text-destructive"
-                title="Delete Chat"
-              >
-                <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
-              </Button>
-            </>
-          )}
+          <div className="flex items-center gap-1 sm:gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={clearConversation}
+            className="h-9 w-9 text-muted-foreground hover:text-destructive"
+            title="Delete Chat"
+          >
+            <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
+          </Button>
         </div>
       </header>
 
@@ -1613,127 +1478,8 @@ const Helper = () => {
             <p className="text-sm text-muted-foreground">Release to add files to your conversation</p>
           </div>
         </div>
-      )}
-
-      {/* Hidden file input for dropzone and direct click */}
-      <input {...getInputProps()} ref={fileInputRef} className="hidden" />      {/* API Key Dialog */}
-      <Dialog open={showApiKeyDialog} onOpenChange={setShowApiKeyDialog}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>API Key Configuration</DialogTitle>
-            <DialogDescription>
-              Configure your API keys for Google Gemini and OpenRouter models. Your keys are stored locally.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6 py-4">
-            {/* Gemini API Key Section */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Bot className="h-4 w-4 text-blue-500" />
-                <h4 className="font-medium text-sm">Google Gemini API Key</h4>
-                <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-700 border-blue-200">
-                  Required for Google models
-                </Badge>
-              </div>
-              <Input
-                type="password"
-                placeholder="Enter your Gemini API key"
-                value={geminiApiKeyInput}
-                onChange={(e) => setGeminiApiKeyInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleApiKeySubmit(); }}
-              />
-              <div className="text-xs text-muted-foreground">
-                Get your API key from{' '}
-                <a 
-                  href="https://aistudio.google.com/app/apikey" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-500 hover:underline"
-                >
-                  Google AI Studio
-                </a>
-                . Enable the Generative Language API.
-              </div>
-            </div>
-
-            {/* OpenRouter API Key Section */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <ExternalLink className="h-4 w-4 text-purple-500" />
-                <h4 className="font-medium text-sm">OpenRouter API Key</h4>
-                <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-700 border-purple-200">
-                  Required for OpenRouter models
-                </Badge>
-              </div>
-              <Input
-                type="password"
-                placeholder="Enter your OpenRouter API key"
-                value={openRouterApiKeyInput}
-                onChange={(e) => setOpenRouterApiKeyInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleApiKeySubmit(); }}
-              />
-              <div className="text-xs text-muted-foreground">
-                Get your API key from{' '}
-                <a 
-                  href="https://openrouter.ai/keys" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-purple-500 hover:underline"
-                >
-                  OpenRouter
-                </a>
-                . Free tier includes access to multiple models.
-              </div>
-            </div>
-
-            {/* Current Model Info */}
-            <div className="bg-muted/50 border rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Info className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Current Model</span>
-              </div>              <div className="flex items-center gap-2">
-                <span className="text-sm">{selectedModel.name}</span>
-                {selectedModel.provider === 'openrouter' ? (
-                  <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-700 border-purple-200">
-                    No Web Search
-                  </Badge>
-                ) : selectedModel.supportsGrounding ? (
-                  <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-700 border-blue-200">
-                    Web Search
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-700 border-purple-200">
-                    No Web Search
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {selectedModel.provider === 'openrouter' 
-                  ? 'This model requires an OpenRouter API key.' 
-                  : 'This model requires a Google Gemini API key.'
-                }
-              </p>
-            </div>
-
-            <div className="text-xs text-muted-foreground">
-              <strong>Privacy:</strong> Your API keys are stored locally in your browser's local storage and are never sent to our servers.
-            </div>
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => { 
-                setShowApiKeyDialog(false); 
-                setGeminiApiKeyInput(''); 
-                setOpenRouterApiKeyInput('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleApiKeySubmit}>Save API Keys</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      )}      {/* Hidden file input for dropzone and direct click */}
+      <input {...getInputProps()} ref={fileInputRef} className="hidden" />
     </div>
   );
 };

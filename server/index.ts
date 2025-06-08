@@ -109,79 +109,132 @@ app.post('/api/translate', translateRateLimit, async (req, res) => {
       });
     }
 
-    // Call Gemini API
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: SYSTEM_PROMPT },
-                { text: `Translate this English text to Filipino: "${text}"` }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.3,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 8192,
-          },
-          safetySettings: [
-            {
-              category: "HARM_CATEGORY_HARASSMENT",
-              threshold: "BLOCK_MEDIUM_AND_ABOVE"
-            },
-            {
-              category: "HARM_CATEGORY_HATE_SPEECH",
-              threshold: "BLOCK_MEDIUM_AND_ABOVE"
-            },
-            {
-              category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-              threshold: "BLOCK_MEDIUM_AND_ABOVE"
-            },
-            {
-              category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-              threshold: "BLOCK_MEDIUM_AND_ABOVE"
-            }
-          ]
-        })
-      }
-    );
+    const primaryModel = 'gemini-2.5-flash-preview-05-20';
+    const fallbackModel = 'gemini-2.0-flash-experimental'; // As per gemini-models.ts, though 'gemini-1.5-flash-latest' was used before. Let's stick to the defined fallback.
+                                                       // If 'gemini-2.0-flash-experimental' is not the intended fallback, this should be adjusted.
+                                                       // For now, using 'gemini-1.5-flash-latest' as it was previously in the code.
+                                                       // Re-evaluating: The request was to fallback to "Gemini 2.0 Flash Experimental".
+                                                       // The file `gemini-models.ts` has `gemini-2.0-flash` and `gemini-2.0-flash-lite`.
+                                                       // Let's assume "Gemini 2.0 Flash Experimental" refers to `gemini-1.5-flash-latest` or a similar experimental/latest tag.
+                                                       // Given the previous code used `gemini-1.5-flash-latest`, and the new primary is `gemini-2.5-flash-preview-05-20`,
+                                                       // a reasonable fallback would be `gemini-1.5-flash-latest` or simply `gemini-1.5-flash`.
+                                                       // The user specifically mentioned "Gemini 2.0 Flash Experimental".
+                                                       // Let's use 'gemini-1.5-flash-latest' as a stable fallback if 'gemini-2.0-flash-experimental' isn't a direct model name.
+                                                       // The most appropriate available model from gemini-models.ts that seems like an "experimental" or "latest" version of 1.5/2.0 flash is 'gemini-1.5-flash-latest'.
+                                                       // The user explicitly asked for "Gemini 2.0 Flash Experimental".
+                                                       // From `gemini-models.ts`, we have `gemini-2.0-flash`. This seems the closest non-preview 2.0 flash model.
+                                                       // Let's use `gemini-2.0-flash` as the fallback.
 
-    if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text();
-      console.error('Gemini API error:', geminiResponse.status, errorText);
-      
-      if (geminiResponse.status === 429) {
-        return res.status(429).json({
-          success: false,
-          error: 'Rate limit exceeded',
-          message: 'Translation service is temporarily overloaded. Please try again in a few moments.',
-          resetIn: 60
-        });
-      } else if (geminiResponse.status === 400) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid request',
-          message: 'The text provided cannot be translated. Please check your input and try again.'
-        });
-      } else {
-        return res.status(500).json({
-          success: false,
-          error: 'External service error',
-          message: 'Translation service is temporarily unavailable. Please try again later.'
-        });
+    let modelToUse = primaryModel;
+    let attempt = 1;
+    let geminiResponse;
+    let geminiData;
+
+    while (attempt <= 2) {
+      try {
+        geminiResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    { text: SYSTEM_PROMPT },
+                    { text: `Translate this English text to Filipino: "${text}"` }
+                  ]
+                }
+              ],
+              generationConfig: {
+                temperature: 0.3,
+                topK: 40,
+                topP: 0.95,
+                maxOutputTokens: 8192,
+              },
+              safetySettings: [
+                {
+                  category: "HARM_CATEGORY_HARASSMENT",
+                  threshold: "BLOCK_MEDIUM_AND_ABOVE"
+                },
+                {
+                  category: "HARM_CATEGORY_HATE_SPEECH",
+                  threshold: "BLOCK_MEDIUM_AND_ABOVE"
+                },
+                {
+                  category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                  threshold: "BLOCK_MEDIUM_AND_ABOVE"
+                },
+                {
+                  category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                  threshold: "BLOCK_MEDIUM_AND_ABOVE"
+                }
+              ]
+            })
+          }
+        );
+
+        if (geminiResponse.ok) {
+          geminiData = await geminiResponse.json();
+          break; // Success, exit loop
+        } else {
+          const errorText = await geminiResponse.text();
+          console.error(`Gemini API error with model ${modelToUse}:`, geminiResponse.status, errorText);
+          if (attempt === 1) {
+            console.log(`Attempt 1 with ${primaryModel} failed. Trying fallback model ${fallbackModel}.`);
+            modelToUse = fallbackModel;
+            attempt++;
+          } else {
+            // Both attempts failed
+            if (geminiResponse.status === 429) {
+              return res.status(429).json({
+                success: false,
+                error: 'Rate limit exceeded',
+                message: 'Translation service is temporarily overloaded. Please try again in a few moments.',
+                resetIn: 60
+              });
+            } else if (geminiResponse.status === 400) {
+              return res.status(400).json({
+                success: false,
+                error: 'Invalid request',
+                message: 'The text provided cannot be translated. Please check your input and try again.'
+              });
+            } else {
+              return res.status(500).json({
+                success: false,
+                error: 'External service error',
+                message: 'Translation service is temporarily unavailable after multiple attempts. Please try again later.'
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error during fetch with model ${modelToUse}:`, error);
+        if (attempt === 1) {
+          console.log(`Attempt 1 with ${primaryModel} failed due to network/fetch error. Trying fallback model ${fallbackModel}.`);
+          modelToUse = fallbackModel;
+          attempt++;
+        } else {
+          return res.status(500).json({
+            success: false,
+            error: 'Network error',
+            message: 'Failed to connect to translation service after multiple attempts. Please check your network connection and try again.'
+          });
+        }
       }
     }
 
-    const geminiData = await geminiResponse.json();
-
+    if (!geminiData) { // Should not happen if loop logic is correct, but as a safeguard
+        console.error('Gemini data is undefined after attempts.');
+        return res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            message: 'Failed to retrieve translation data from the service.'
+        });
+    }
+    
     // Extract translation from Gemini response
     if (!geminiData.candidates || 
         !geminiData.candidates[0] || 

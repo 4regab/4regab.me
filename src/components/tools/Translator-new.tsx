@@ -49,15 +49,15 @@ const Translator = () => {
       try {
         // Check rate limiting before making request
         checkRateLimit();
-        
-        // Call our backend API instead of Gemini directly
+          // Call our Vercel serverless function
         const response = await fetch('/api/translate', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            text: inputText.trim()
+          },          body: JSON.stringify({
+            text: inputText.trim(),
+            targetLanguage: 'Tagalog',
+            sourceLanguage: 'English'
           })
         });
 
@@ -82,9 +82,8 @@ const Translator = () => {
         }
 
         const data = await response.json();
-        
-        if (data.success && data.translation) {
-          setTranslatedText(data.translation);
+          if (data.success && data.translatedText) {
+          setTranslatedText(data.translatedText);
           setRetryCount(0); // Reset retry count on success
         } else {
           throw new Error("Translation failed - no output received from service");
@@ -275,12 +274,11 @@ const Translator = () => {
         <div className="text-center space-y-3 p-4 bg-background/30 rounded-lg border border-foreground/10">
           <div className="text-sm text-foreground/80 font-medium">
             Press <kbd className="px-2 py-1 bg-foreground/10 rounded text-xs font-semibold">Ctrl + Enter</kbd> to translate quickly
-          </div>
-          <div className="text-xs text-foreground/60 leading-relaxed space-y-1">
-            <div>💡 <strong>Secure Service:</strong> All translations are processed securely on our servers</div>
+          </div>          <div className="text-xs text-foreground/60 leading-relaxed space-y-1">
+            <div>💡 <strong>Secure Service:</strong> All translations are processed securely using Vercel serverless functions</div>
             <div>⏱️ <strong>Rate Limited:</strong> Automatic 2-second delay between requests for optimal performance</div>
             <div>🔄 <strong>Auto-Retry:</strong> Failed requests are automatically retried with smart backoff timing</div>
-            <div>🔒 <strong>Privacy:</strong> No API keys required - everything is handled server-side</div>
+            <div>🔒 <strong>Privacy:</strong> No API keys required - everything is handled server-side with Vercel</div>
           </div>
         </div>
       </CardContent>

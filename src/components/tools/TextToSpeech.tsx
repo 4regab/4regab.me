@@ -1,12 +1,9 @@
 import { useState, useEffect } from "react";
-import { Volume2, Download, Play, Pause, Settings, Loader2, RotateCcw, Square, MessageSquare, Sliders, ChevronDown, ChevronUp } from "lucide-react";
+import { Volume2, Download, Play, Pause, Loader2, RotateCcw, Square, MessageSquare, Sliders, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -120,14 +117,12 @@ function createWAVFromPCM(pcmData: Uint8Array, sampleRate: number = 24000, chann
 
 const TextToSpeech = () => {
   const [inputText, setInputText] = useState("");
-  const [apiKey, setApiKey] = useState("");
   const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-preview-tts");
   const [selectedVoice, setSelectedVoice] = useState("Kore");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [showApiDialog, setShowApiDialog] = useState(false);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [detectedFormat, setDetectedFormat] = useState<string>('mp3');
@@ -207,44 +202,9 @@ const TextToSpeech = () => {
       ...prev,
       [key]: value
     }));  };
-
-  // Load API key from localStorage on component mount
-  useEffect(() => {
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const savedApiKey = localStorage.getItem('gemini-api-key');
-        if (savedApiKey) {
-          setApiKey(savedApiKey);
-        }
-      }
-    } catch (error) {
-      console.warn('localStorage access blocked:', error);
-    }
-  }, []);
-
-  // Save API key to localStorage whenever it changes
-  const handleApiKeyChange = (newApiKey: string) => {
-    setApiKey(newApiKey);
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        if (newApiKey.trim()) {
-          localStorage.setItem('gemini-api-key', newApiKey);
-        } else {
-          localStorage.removeItem('gemini-api-key');
-        }
-      }
-    } catch (error) {
-      console.warn('localStorage access blocked:', error);
-    }
-  };
   const generateSpeech = async () => {
     if (!inputText.trim()) {
       setError("Please enter text to convert to speech");
-      return;
-    }
-
-    if (!apiKey.trim()) {
-      setShowApiDialog(true);
       return;
     }
 
@@ -261,50 +221,29 @@ const TextToSpeech = () => {
       // Construct the final text based on control mode
       const finalText = constructPromptFromSettings(inputText);
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
+      // Call our Vercel serverless function
+      const response = await fetch('/api/tts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: finalText
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: selectedVoice
-                }
-              }
-            }
-          }
+          text: finalText,
+          model: selectedModel,
+          voice: selectedVoice
         })
-      });if (!response.ok) {
-        let errorMessage = `API Error: ${response.status} ${response.statusText}`;
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        let errorMessage = errorData.message || `TTS Error: ${response.status} ${response.statusText}`;
         
         if (response.status === 429) {
-          errorMessage = "Rate limit exceeded. Please wait 24 hours or change your API key to continue. Consider using shorter text.";
-        } else if (response.status === 401) {
-          errorMessage = "Invalid API key. Please check your Gemini API key and try again.";
-        } else if (response.status === 403) {
-          errorMessage = "Access forbidden. Your API key may not have permission for TTS or may have exceeded quota.";
+          errorMessage = "Rate limit exceeded. Please wait a moment before trying again. Consider using shorter text.";
         } else if (response.status === 400) {
-          const errorData = await response.json().catch(() => null);
-          if (errorData?.error?.message) {
-            errorMessage = `Bad request: ${errorData.error.message}`;
-          } else {
-            errorMessage = "Bad request. Please check your input text and selected model.";
-          }
+          errorMessage = errorData.message || "Bad request. Please check your input text and try again.";
         } else if (response.status >= 500) {
-          errorMessage = "Server error. Google's TTS service may be temporarily unavailable. Please try again later.";
+          errorMessage = "TTS service may be temporarily unavailable. Please try again later.";
         }
         
         throw new Error(errorMessage);
@@ -312,118 +251,116 @@ const TextToSpeech = () => {
 
       const data = await response.json();
       
-      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-        const audioData = data.candidates[0].content.parts[0].inlineData?.data;        if (audioData) {
-          // Convert base64 to blob and create URL - improved method
-          try {
-            const binaryString = atob(audioData);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-              // Enhanced format detection and audio processing for Gemini TTS
-            let audioBlob;
-            let detectedFormat = 'unknown';
+      if (data.success && data.audioData) {
+        // Convert base64 to blob and create URL - improved method
+        try {
+          const binaryString = atob(data.audioData);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          // Enhanced format detection and audio processing for Gemini TTS
+          let audioBlob;
+          let detectedFormat = 'unknown';
+          
+          // Check format by examining the header bytes more thoroughly
+          const header = bytes.slice(0, 32); // Get more header data
+          const headerString = String.fromCharCode(...header);
+          
+          // Log extensive debug info
+          console.log('Raw audio data analysis:', {
+            totalSize: bytes.length,
+            headerHex: Array.from(header.slice(0, 16)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '),
+            headerAscii: headerString.replace(/[^\x20-\x7E]/g, '.'),
+            firstBytes: Array.from(bytes.slice(0, 4)),
+            last4Bytes: Array.from(bytes.slice(-4))
+          });
+          
+          // Check if this is raw PCM audio data (common for TTS)
+          let isProbablyPCM = false;
+          
+          // WAV detection (RIFF header)
+          if (header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46 &&
+              header[8] === 0x57 && header[9] === 0x41 && header[10] === 0x56 && header[11] === 0x45) {
+            audioBlob = new Blob([bytes], { type: 'audio/wav' });
+            detectedFormat = 'wav';
+            setDetectedFormat('wav');
+            console.log('Detected: WAV format');
+          }
+          // MP3 detection (ID3 tag or MP3 frame sync)
+          else if ((header[0] === 0x49 && header[1] === 0x44 && header[2] === 0x33) || // ID3v2
+                   (header[0] === 0xFF && (header[1] & 0xE0) === 0xE0)) { // MP3 frame sync
+            audioBlob = new Blob([bytes], { type: 'audio/mpeg' });
+            detectedFormat = 'mp3';
+            setDetectedFormat('mp3');
+            console.log('Detected: MP3 format');
+          }
+          // OGG detection
+          else if (header[0] === 0x4F && header[1] === 0x67 && header[2] === 0x67 && header[3] === 0x53) {
+            audioBlob = new Blob([bytes], { type: 'audio/ogg' });
+            detectedFormat = 'ogg';
+            setDetectedFormat('ogg');
+            console.log('Detected: OGG format');
+          }
+          // FLAC detection
+          else if (header[0] === 0x66 && header[1] === 0x4C && header[2] === 0x61 && header[3] === 0x43) {
+            audioBlob = new Blob([bytes], { type: 'audio/flac' });
+            detectedFormat = 'flac';
+            setDetectedFormat('flac');
+            console.log('Detected: FLAC format');
+          }
+          // M4A/AAC detection
+          else if (header[4] === 0x66 && header[5] === 0x74 && header[6] === 0x79 && header[7] === 0x70) {
+            audioBlob = new Blob([bytes], { type: 'audio/mp4' });
+            detectedFormat = 'mp4';
+            setDetectedFormat('m4a');
+            console.log('Detected: M4A/AAC format');
+          }
+          // Check if it might be raw PCM data
+          else {
+            console.log('No known format detected, analyzing for PCM...');
             
-            // Check format by examining the header bytes more thoroughly
-            const header = bytes.slice(0, 32); // Get more header data
-            const headerString = String.fromCharCode(...header);
+            // Check if the data looks like raw PCM audio
+            const sampleVariance = calculateVariance(bytes.slice(0, 1024));
+            const isLikelyPCM = sampleVariance > 100 && sampleVariance < 50000;
             
-            // Log extensive debug info
-            console.log('Raw audio data analysis:', {
-              totalSize: bytes.length,
-              headerHex: Array.from(header.slice(0, 16)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '),
-              headerAscii: headerString.replace(/[^\x20-\x7E]/g, '.'),
-              firstBytes: Array.from(bytes.slice(0, 4)),
-              last4Bytes: Array.from(bytes.slice(-4))
-            });
+            console.log('PCM analysis:', { sampleVariance, isLikelyPCM });
             
-            // Check if this is raw PCM audio data (common for TTS)
-            let isProbablyPCM = false;
-            
-            // WAV detection (RIFF header)
-            if (header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46 &&
-                header[8] === 0x57 && header[9] === 0x41 && header[10] === 0x56 && header[11] === 0x45) {
-              audioBlob = new Blob([bytes], { type: 'audio/wav' });
+            if (isLikelyPCM) {
+              console.log('Data appears to be raw PCM, converting to WAV...');
+              // Convert raw PCM to WAV format
+              const wavBytes = createWAVFromPCM(bytes);
+              audioBlob = new Blob([wavBytes], { type: 'audio/wav' });
               detectedFormat = 'wav';
               setDetectedFormat('wav');
-              console.log('Detected: WAV format');
-            }
-            // MP3 detection (ID3 tag or MP3 frame sync)
-            else if ((header[0] === 0x49 && header[1] === 0x44 && header[2] === 0x33) || // ID3v2
-                     (header[0] === 0xFF && (header[1] & 0xE0) === 0xE0)) { // MP3 frame sync
+              isProbablyPCM = true;
+            } else {
+              // Default: Try as MP3 first, then WAV
+              console.log('Unknown format, defaulting to MP3...');
               audioBlob = new Blob([bytes], { type: 'audio/mpeg' });
               detectedFormat = 'mp3';
               setDetectedFormat('mp3');
-              console.log('Detected: MP3 format');
             }
-            // OGG detection
-            else if (header[0] === 0x4F && header[1] === 0x67 && header[2] === 0x67 && header[3] === 0x53) {
-              audioBlob = new Blob([bytes], { type: 'audio/ogg' });
-              detectedFormat = 'ogg';
-              setDetectedFormat('ogg');
-              console.log('Detected: OGG format');
-            }
-            // FLAC detection
-            else if (header[0] === 0x66 && header[1] === 0x4C && header[2] === 0x61 && header[3] === 0x43) {
-              audioBlob = new Blob([bytes], { type: 'audio/flac' });
-              detectedFormat = 'flac';
-              setDetectedFormat('flac');
-              console.log('Detected: FLAC format');
-            }
-            // M4A/AAC detection
-            else if (header[4] === 0x66 && header[5] === 0x74 && header[6] === 0x79 && header[7] === 0x70) {
-              audioBlob = new Blob([bytes], { type: 'audio/mp4' });
-              detectedFormat = 'mp4';
-              setDetectedFormat('m4a');
-              console.log('Detected: M4A/AAC format');
-            }
-            // Check if it might be raw PCM data
-            else {
-              console.log('No known format detected, analyzing for PCM...');
-              
-              // Check if the data looks like raw PCM audio
-              const sampleVariance = calculateVariance(bytes.slice(0, 1024));
-              const isLikelyPCM = sampleVariance > 100 && sampleVariance < 50000;
-              
-              console.log('PCM analysis:', { sampleVariance, isLikelyPCM });
-              
-              if (isLikelyPCM) {
-                console.log('Data appears to be raw PCM, converting to WAV...');
-                // Convert raw PCM to WAV format
-                const wavBytes = createWAVFromPCM(bytes);
-                audioBlob = new Blob([wavBytes], { type: 'audio/wav' });
-                detectedFormat = 'wav';
-                setDetectedFormat('wav');
-                isProbablyPCM = true;
-              } else {
-                // Default: Try as MP3 first, then WAV
-                console.log('Unknown format, defaulting to MP3...');
-                audioBlob = new Blob([bytes], { type: 'audio/mpeg' });
-                detectedFormat = 'mp3';
-                setDetectedFormat('mp3');
-              }
-            }
-            
-            const url = URL.createObjectURL(audioBlob);
-            setAudioUrl(url);
-            
-            // Log audio info for debugging
-            console.log('Audio blob created:', {
-              size: audioBlob.size,
-              type: audioBlob.type,
-              detectedFormat: detectedFormat,
-              headerSample: Array.from(header.slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ')
-            });
-            
-          } catch (audioError) {
-            console.error('Audio blob creation error:', audioError);
-            throw new Error("Failed to process audio data");
           }
-        } else {
-          throw new Error("No audio data received from API");
-        }      } else {
-        throw new Error("Unexpected response format from API");
+          
+          const url = URL.createObjectURL(audioBlob);
+          setAudioUrl(url);
+          
+          // Log audio info for debugging
+          console.log('Audio blob created:', {
+            size: audioBlob.size,
+            type: audioBlob.type,
+            detectedFormat: detectedFormat,
+            headerSample: Array.from(header.slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ')
+          });
+          
+        } catch (audioError) {
+          console.error('Audio blob creation error:', audioError);
+          throw new Error("Failed to process audio data");
+        }
+      } else {
+        throw new Error("No audio data received from API");
       }
       
       // Reset retry count on success
@@ -444,17 +381,17 @@ const TextToSpeech = () => {
       setIsLoading(false);
     }
   };
-
   const retryGeneration = async () => {
     if (retryCount < 3) {
       setRetryCount(prev => prev + 1);
       // Add a small delay before retry
       await new Promise(resolve => setTimeout(resolve, 2000 + (retryCount * 1000)));
       generateSpeech();
-    } else {      setError("Maximum retry attempts reached. Please try again later with shorter text or a different model.");
+    } else {
+      setError("Maximum retry attempts reached. Please try again later with shorter text or a different model.");
       setCanRetry(false);
     }
-  };  const playAudio = async () => {
+  };const playAudio = async () => {
     if (!audioUrl) return;
     
     try {
@@ -911,72 +848,10 @@ const TextToSpeech = () => {
             <Label htmlFor="input-text" className="text-lg font-semibold text-foreground block mb-2">
               Text to Convert
             </Label>
-            <p className="text-sm text-foreground/60">
-              Enter the text you want to convert to speech
+            <p className="text-sm text-foreground/60">              Enter the text you want to convert to speech
             </p>
           </div>
-          <Dialog open={showApiDialog} onOpenChange={setShowApiDialog}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="neon-border text-sm font-medium">
-                <Settings size={16} className="mr-2" />
-                API Settings
-              </Button>
-            </DialogTrigger>            <DialogContent className="neo-card neon-border max-w-lg">
-              <DialogHeader className="pb-6">
-                <DialogTitle className="font-display text-xl font-bold text-foreground">TTS Configuration</DialogTitle>
-                <DialogDescription className="text-base text-foreground/80 leading-relaxed">
-                  Configure your Text-to-Speech API settings to get started
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={(e) => { e.preventDefault(); setShowApiDialog(false); }}>
-                <div className="space-y-6">
-                  <div className="space-y-3">
-                    <Label htmlFor="api-key" className="text-sm font-semibold text-foreground">Gemini API Key</Label>
-                    <Input
-                      id="api-key"
-                      type="password"
-                      value={apiKey}
-                      onChange={(e) => handleApiKeyChange(e.target.value)}
-                      placeholder="Enter your Gemini API key"
-                      className="text-sm h-11"
-                    />
-                  </div>
-                  
-                  <Alert className="bg-blue-50/50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800">
-                    <AlertDescription className="text-sm text-foreground/90 leading-relaxed">
-                      <strong className="text-foreground font-semibold">Quick Setup Guide:</strong>
-                      <ol className="list-decimal list-inside mt-4 space-y-2 text-sm leading-relaxed">
-                        <li>Visit <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-neon-blue hover:underline font-medium">Google AI Studio</a></li>
-                        <li>Sign in with your Google account</li>
-                        <li>Click "Create API Key" button</li>
-                        <li>Copy the generated key and paste it above</li>
-                        <li className="text-foreground/70 text-xs">Your key is stored locally and never sent to our servers</li>
-                      </ol>
-                    </AlertDescription>
-                  </Alert>
-                    <div className="flex gap-3 pt-3">
-                    <Button 
-                      type="submit"
-                      className="flex-1 bg-neon-purple/20 neon-border hover:bg-neon-purple/30 font-medium h-11 text-white"
-                      disabled={!apiKey.trim()}
-                    >
-                      Save Configuration
-                    </Button>
-                    {apiKey.trim() && (
-                      <Button 
-                        onClick={() => handleApiKeyChange('')}
-                        variant="outline"
-                        className="neon-border text-red-400 hover:bg-red-500/10 font-medium h-11"
-                      >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>        {/* Model and Voice Selection */}
+        </div>{/* Model and Voice Selection */}
         <div className="space-y-6 border border-foreground/10 rounded-lg p-6 bg-background/50">
           <div className="border-b border-foreground/10 pb-3">
             <h3 className="text-xl font-bold text-foreground tracking-tight">

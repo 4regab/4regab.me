@@ -1,0 +1,19 @@
+{
+  "functions": {
+    "api/chat.ts": {
+      "maxDuration": 60
+    },
+    "api/translate.ts": {
+      "maxDuration": 30
+    },
+    "api/tts.ts": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ]
+}
