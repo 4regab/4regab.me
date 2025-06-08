@@ -1,303 +1,159 @@
 import { useState, useEffect } from "react";
-import { Volume2, Download, Play, Pause, Loader2, Square, Sliders, ChevronDown, ChevronUp, Bot, FileText, Zap, Settings, Mic, AudioWaveform, VolumeX, AlertTriangle } from "lucide-react";
+import { Volume2, Play, Pause, Square, Settings, Mic, AudioWaveform, VolumeX, AlertTriangle, Sliders } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
-interface VoiceOption {
-  name: string;
-  description: string;
+interface VoiceSettings {
+  rate: number;
+  pitch: number;
+  volume: number;
 }
 
-interface DetailedSettings {
-  speed: number;
-  stability: number;
-  similarity: number;
-  styleExaggeration: number;
-  speakerBoost: boolean;
-}
-
-const DEFAULT_DETAILED_SETTINGS: DetailedSettings = {
-  speed: 0.95,
-  stability: 50,
-  similarity: 50,
-  styleExaggeration: 50,
-  speakerBoost: false,
+const DEFAULT_SETTINGS: VoiceSettings = {
+  rate: 1.0,
+  pitch: 1.0,
+  volume: 1.0,
 };
-
-type ControlMode = "prompt" | "detailed";
-
-const VOICE_OPTIONS: VoiceOption[] = [
-  { name: "Zephyr", description: "Bright & Energetic" },
-  { name: "Puck", description: "Upbeat & Youthful" },
-  { name: "Charon", description: "Informative & Clear" },
-  { name: "Kore", description: "Firm & Professional" },
-  { name: "Fenrir", description: "Excitable & Dynamic" },
-  { name: "Leda", description: "Youthful & Fresh" },
-  { name: "Orus", description: "Firm & Authoritative" },
-  { name: "Aoede", description: "Breezy & Light" },
-  { name: "Callirrhoe", description: "Easy-going & Calm" },
-  { name: "Autonoe", description: "Bright & Cheerful" },
-  { name: "Enceladus", description: "Breathy & Soft" },
-  { name: "Iapetus", description: "Clear & Crisp" },
-  { name: "Umbriel", description: "Easy-going & Smooth" },
-  { name: "Algieba", description: "Smooth & Sophisticated" },
-  { name: "Despina", description: "Smooth & Elegant" },
-  { name: "Erinome", description: "Clear & Articulate" },
-  { name: "Algenib", description: "Gravelly & Deep" },
-  { name: "Rasalgethi", description: "Informative & Mature" },
-  { name: "Laomedeia", description: "Upbeat & Vibrant" },
-  { name: "Achernar", description: "Soft & Gentle" },
-  { name: "Alnilam", description: "Firm & Steady" },
-  { name: "Schedar", description: "Even & Balanced" },
-  { name: "Gacrux", description: "Mature & Wise" },
-  { name: "Pulcherrima", description: "Forward & Bold" },
-  { name: "Achird", description: "Friendly & Warm" },
-  { name: "Zubenelgenubi", description: "Casual & Relaxed" },
-  { name: "Vindemiatrix", description: "Gentle & Soothing" },
-  { name: "Sadachbia", description: "Lively & Animated" },
-  { name: "Sadaltager", description: "Knowledgeable & Wise" },
-  { name: "Sulafat", description: "Warm & Inviting" }
-];
-
-const MODEL_OPTIONS = [
-  { value: "gemini-2.5-flash-preview-tts", label: "Gemini 2.5 Flash Preview TTS" },
-  { value: "gemini-2.5-flash-exp-native-audio-thinking-dialog", label: "Gemini 2.5 Flash Exp Native Audio Thinking Dialog" },
-  { value: "gemini-2.5-flash-preview-native-audio-dialog", label: "Gemini 2.5 Flash Preview Native Audio Dialog" },
-  { value: "gemini-2.0-flash-live-001", label: "Gemini 2.0 Flash Live 001" }
-];
-
-// Helper function to calculate variance (for PCM detection)
-function calculateVariance(data: Uint8Array): number {
-  const mean = data.reduce((sum, val) => sum + val, 0) / data.length;
-  const variance = data.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / data.length;
-  return variance;
-}
-
-// Helper function to create WAV file from raw PCM data
-function createWAVFromPCM(pcmData: Uint8Array, sampleRate: number = 24000, channels: number = 1, bitsPerSample: number = 16): Uint8Array {
-  const byteRate = sampleRate * channels * bitsPerSample / 8;
-  const blockAlign = channels * bitsPerSample / 8;
-  const dataSize = pcmData.length;
-  const fileSize = 36 + dataSize;
-
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-  const uint8View = new Uint8Array(buffer);
-
-  // RIFF header
-  view.setUint32(0, 0x52494646, false); // "RIFF"
-  view.setUint32(4, fileSize, true);
-  view.setUint32(8, 0x57415645, false); // "WAVE"
-
-  // fmt chunk
-  view.setUint32(12, 0x666d7420, false); // "fmt "
-  view.setUint32(16, 16, true); // chunk size
-  view.setUint16(20, 1, true); // PCM format
-  view.setUint16(22, channels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitsPerSample, true);
-
-  // data chunk
-  view.setUint32(36, 0x64617461, false); // "data"
-  view.setUint32(40, dataSize, true);
-
-  // Copy PCM data
-  uint8View.set(pcmData, 44);
-
-  return uint8View;
-}
 
 const TextToSpeech = () => {
   const [inputText, setInputText] = useState("");
-  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-preview-tts");
-  const [selectedVoice, setSelectedVoice] = useState("Kore");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [selectedVoice, setSelectedVoice] = useState("");
   const [isPlaying, setIsPlaying] = useState(false);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const [detectedFormat, setDetectedFormat] = useState<string>('mp3');
-  const [canRetry, setCanRetry] = useState(false);
-  const [controlMode, setControlMode] = useState<ControlMode>("prompt");
-  const [detailedSettings, setDetailedSettings] = useState<DetailedSettings>(DEFAULT_DETAILED_SETTINGS);
-  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [error, setError] = useState("");
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_SETTINGS);
+  const [currentUtterance, setCurrentUtterance] = useState<SpeechSynthesisUtterance | null>(null);
+  const [isSupported, setIsSupported] = useState(true);
 
-  // Helper functions for detailed settings
-  const updateDetailedSetting = (key: keyof DetailedSettings, value: number | boolean) => {
-    setDetailedSettings(prev => ({ ...prev, [key]: value }));
-  };
-
-  const constructPromptFromSettings = (originalText: string): string => {
-    if (controlMode === "prompt") {
-      return originalText;
+  // Load available voices on component mount
+  useEffect(() => {
+    if (!('speechSynthesis' in window)) {
+      setIsSupported(false);
+      setError("Text-to-Speech is not supported in your browser. Please try using Chrome, Firefox, Safari, or Edge.");
+      return;
     }
 
-    const instructions: string[] = [];
+    const loadVoices = () => {
+      const voices = speechSynthesis.getVoices();
+      setAvailableVoices(voices);
+      
+      // Set default voice to first English voice if available
+      if (voices.length > 0 && !selectedVoice) {
+        const englishVoice = voices.find(voice => voice.lang.startsWith('en')) || voices[0];
+        setSelectedVoice(englishVoice.name);
+      }
+    };
+
+    // Load voices immediately if available
+    loadVoices();
     
-    // Speed mapping
-    if (detailedSettings.speed < 0.85) {
-      instructions.push("speak very slowly and deliberately");
-    } else if (detailedSettings.speed < 0.92) {
-      instructions.push("speak slowly");
-    } else if (detailedSettings.speed > 1.10) {
-      instructions.push("speak very quickly");
-    } else if (detailedSettings.speed > 1.02) {
-      instructions.push("speak at a brisk pace");
-    }
+    // Also load when voices become available (some browsers load them async)
+    speechSynthesis.addEventListener('voiceschanged', loadVoices);
+    
+    return () => {
+      speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+    };
+  }, [selectedVoice]);
 
-    // Stability mapping
-    if (detailedSettings.stability > 75) {
-      instructions.push("maintain very consistent tone and pace");
-    } else if (detailedSettings.stability < 25) {
-      instructions.push("vary your tone and expression naturally");
-    }
-
-    // Style exaggeration mapping
-    if (detailedSettings.styleExaggeration > 75) {
-      instructions.push("speak with dramatic emphasis and strong emotional expression");
-    } else if (detailedSettings.styleExaggeration < 25) {
-      instructions.push("speak in a neutral, understated manner");
-    }
-
-    // Speaker boost
-    if (detailedSettings.speakerBoost) {
-      instructions.push("project your voice clearly and confidently");
-    }
-
-    if (instructions.length > 0) {
-      return `${instructions.join(", ")}. ${originalText}`;
-    }
-
-    return originalText;
+  // Update settings
+  const updateSetting = (key: keyof VoiceSettings, value: number) => {
+    setSettings(prev => ({ ...prev, [key]: value }));
   };
 
-  const generateSpeech = async () => {
+  const speak = () => {
     if (!inputText.trim()) {
       setError("Please enter text to convert to speech");
       return;
     }
 
-    setIsLoading(true);
+    if (!isSupported) {
+      setError("Text-to-Speech is not supported in your browser");
+      return;
+    }
+
+    // Stop any current speech
+    speechSynthesis.cancel();
+    
     setError("");
-    setCanRetry(false);
-    setRetryCount(0);
-
-    // Clean up previous audio
-    if (audioUrl) {
-      URL.revokeObjectURL(audioUrl);
-      setAudioUrl(null);
+    
+    const utterance = new SpeechSynthesisUtterance(inputText.trim());
+    
+    // Find and set the selected voice
+    const voice = availableVoices.find(v => v.name === selectedVoice);
+    if (voice) {
+      utterance.voice = voice;
     }
-    if (audioElement) {
-      audioElement.pause();
-      setAudioElement(null);
-    }
+    
+    // Apply settings
+    utterance.rate = settings.rate;
+    utterance.pitch = settings.pitch;
+    utterance.volume = settings.volume;
+    
+    // Set up event handlers
+    utterance.onstart = () => {
+      setIsPlaying(true);
+      setIsPaused(false);
+      setCurrentUtterance(utterance);
+    };
+    
+    utterance.onend = () => {
+      setIsPlaying(false);
+      setIsPaused(false);
+      setCurrentUtterance(null);
+    };
+    
+    utterance.onerror = (event) => {
+      setIsPlaying(false);
+      setIsPaused(false);
+      setCurrentUtterance(null);
+      setError(`Speech error: ${event.error}`);
+    };
+    
+    utterance.onpause = () => {
+      setIsPaused(true);
+    };
+    
+    utterance.onresume = () => {
+      setIsPaused(false);
+    };
+    
+    // Start speaking
+    speechSynthesis.speak(utterance);
+  };
 
-    try {
-      const textToProcess = constructPromptFromSettings(inputText.trim());
-      
-      const response = await fetch('/api/tts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: textToProcess,
-          model: selectedModel,
-          voice: selectedVoice,
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        
-        if (response.status === 429) {
-          setCanRetry(true);
-          throw new Error(errorData.message || 'Rate limit exceeded. You can retry in a moment.');
-        } else if (response.status === 400) {
-          throw new Error(errorData.message || 'Invalid request. Please check your input and try again.');
-        } else if (response.status === 500) {
-          setCanRetry(true);
-          throw new Error(errorData.message || 'Service temporarily unavailable. Please try again.');
-        } else {
-          throw new Error(errorData.message || `Error: ${response.status} ${response.statusText}`);
-        }
-      }
-
-      const audioBlob = await response.blob();
-      
-      if (audioBlob.size === 0) {
-        throw new Error("No audio data received from the service");
-      }
-
-      const url = URL.createObjectURL(audioBlob);
-      setAudioUrl(url);
-      
-      // Auto-detect format based on blob type or default to mp3
-      const blobType = audioBlob.type;
-      if (blobType.includes('mp3') || blobType.includes('mpeg')) {
-        setDetectedFormat('mp3');
-      } else if (blobType.includes('wav')) {
-        setDetectedFormat('wav');
-      } else if (blobType.includes('ogg')) {
-        setDetectedFormat('ogg');
-      } else {
-        setDetectedFormat('mp3'); // fallback
-      }
-
-    } catch (err) {
-      console.error('TTS Error:', err);
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("An unexpected error occurred while generating speech");
-      }
-    } finally {
-      setIsLoading(false);
+  const pauseResume = () => {
+    if (speechSynthesis.paused) {
+      speechSynthesis.resume();
+    } else {
+      speechSynthesis.pause();
     }
   };
 
-  const retryGeneration = () => {
-    if (retryCount < 3) {
-      setRetryCount(prev => prev + 1);
-      generateSpeech();
-    }
+  const stop = () => {
+    speechSynthesis.cancel();
+    setIsPlaying(false);
+    setIsPaused(false);
+    setCurrentUtterance(null);
   };
 
-  const playAudio = async () => {
-    if (!audioUrl) return;
-
-    try {
-      // If we have an existing audio element that's paused, resume it
-      if (audioElement && audioElement.paused && !audioElement.ended) {
-        setIsPlaying(true);
-        await audioElement.play();
-        return;
-      }
-      
-      // Create new audio element
-      const audio = new Audio();
-      setAudioElement(audio);
-      
-      audio.onended = () => {
-        setIsPlaying(false);
-        setAudioElement(null);
-      };
-      
-      audio.onerror = () => {
-        setIsPlaying(false);
-        setAudioElement(null);
+  // Get popular voices for quick selection
+  const getPopularVoices = () => {
+    const popular = availableVoices.filter(voice => 
+      voice.lang.startsWith('en') && 
+      (voice.name.includes('Google') || voice.name.includes('Microsoft') || voice.default)
+    ).slice(0, 2);
+    
+    return popular.length > 0 ? popular : availableVoices.slice(0, 2);
+  };
         setError("Audio playback failed. Please try downloading the file.");
       };
       

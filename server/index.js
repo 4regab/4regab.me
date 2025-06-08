@@ -72,6 +72,46 @@ const translateRateLimit = rateLimit({
   }
 });
 
+// Rate limiting for chat
+const chatRateLimit = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // 30 requests per minute per IP
+  message: {
+    success: false,
+    error: 'Too many chat requests. Please try again later.',
+    resetIn: 60
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({
+      success: false,
+      error: 'Too many chat requests. Please try again later.',
+      resetIn: Math.ceil((req.rateLimit.resetTime - Date.now()) / 1000)
+    });
+  }
+});
+
+// Rate limiting for TTS
+const ttsRateLimit = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 requests per minute per IP
+  message: {
+    success: false,
+    error: 'Too many TTS requests. Please try again later.',
+    resetIn: 60
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({
+      success: false,
+      error: 'Too many TTS requests. Please try again later.',
+      resetIn: Math.ceil((req.rateLimit.resetTime - Date.now()) / 1000)
+    });
+  }
+});
+
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -149,6 +189,275 @@ function validateTranslationInput(text) {
   
   return { valid: true, text: trimmedText };
 }
+
+// Chat endpoint
+app.post('/api/chat', chatRateLimit, async (req, res) => {
+  try {
+    const { 
+      prompt, 
+      systemPrompt, 
+      conversationHistory, 
+      model = 'gemini-1.5-flash',
+      enableThinking = false 
+    } = req.body;
+
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid input',
+        message: 'Prompt field is required and must be a string'
+      });
+    }
+
+    const trimmedPrompt = prompt.trim();
+    
+    if (!trimmedPrompt) {
+      return res.status(400).json({
+        success: false,
+        error: 'Empty input',
+        message: 'Prompt cannot be empty'
+      });
+    }
+
+    if (trimmedPrompt.length > 100000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Prompt too long',
+        message: 'Prompt must be less than 100,000 characters'
+      });
+    }
+
+    // Prepare contents for Gemini API
+    const contents = [];
+
+    // Add conversation history if provided
+    if (conversationHistory && Array.isArray(conversationHistory)) {
+      for (const historyItem of conversationHistory) {
+        if (historyItem.role && historyItem.parts) {
+          contents.push({
+            role: historyItem.role,
+            parts: historyItem.parts
+          });
+        }
+      }
+    }
+
+    // Add current user prompt
+    const currentParts = [{ text: trimmedPrompt }];
+    contents.push({ role: 'user', parts: currentParts });
+
+    // Generate response using Gemini
+    const model_instance = genAI.getGenerativeModel({ 
+      model: model,
+      generationConfig: {
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192,
+      },
+      safetySettings: [
+        {
+          category: "HARM_CATEGORY_HARASSMENT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+          category: "HARM_CATEGORY_HATE_SPEECH",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        }
+      ]
+    });
+
+    const result = await model_instance.generateContent(contents);
+    const response = await result.response;
+    const text = response.text();
+
+    if (!text || text.trim().length === 0) {
+      throw new Error('Empty response from chat service');
+    }
+
+    res.json({
+      success: true,
+      response: text.trim(),
+      model: model,
+      promptLength: trimmedPrompt.length,
+      responseLength: text.trim().length
+    });
+
+  } catch (error) {
+    console.error('Chat error:', error);
+    
+    let statusCode = 500;
+    let errorMessage = 'Chat service temporarily unavailable';
+    
+    // Handle specific error types
+    if (error.message?.includes('API key')) {
+      statusCode = 500;
+      errorMessage = 'Chat service configuration error';
+    } else if (error.message?.includes('quota') || error.message?.includes('limit')) {
+      statusCode = 503;
+      errorMessage = 'Chat service temporarily overloaded. Please try again later.';
+    } else if (error.message?.includes('timeout')) {
+      statusCode = 504;
+      errorMessage = 'Chat request timed out. Please try again.';
+    } else if (error.message?.includes('Empty response')) {
+      statusCode = 502;
+      errorMessage = 'Chat service returned an empty response. Please try again.';
+    }
+    
+    res.status(statusCode).json({
+      success: false,
+      error: errorMessage
+    });
+  }
+});
+
+// TTS endpoint
+app.post('/api/tts', ttsRateLimit, async (req, res) => {
+  try {
+    const { text, model, voice } = req.body;
+
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid input',
+        message: 'Text field is required and must be a string'
+      });
+    }
+
+    const trimmedText = text.trim();
+    
+    if (!trimmedText) {
+      return res.status(400).json({
+        success: false,
+        error: 'Empty input',
+        message: 'Text cannot be empty'
+      });
+    }
+
+    if (trimmedText.length > 2000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Text too long',
+        message: 'Text must be less than 2000 characters for TTS'
+      });
+    }
+
+    // Validate model and voice
+    const selectedModel = model || 'gemini-1.5-flash';
+    const selectedVoice = voice || 'Kore';
+
+    // Call Gemini TTS API using fetch
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: trimmedText
+                }
+              ]
+            }
+          ],
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: selectedVoice
+                }
+              }
+            }
+          }
+        })
+      }
+    );
+
+    if (!geminiResponse.ok) {
+      console.error('Gemini TTS API error:', geminiResponse.status, geminiResponse.statusText);
+      
+      let errorMessage = `TTS API Error: ${geminiResponse.status} ${geminiResponse.statusText}`;
+      
+      if (geminiResponse.status === 429) {
+        errorMessage = "Rate limit exceeded. Please try again later or use shorter text.";
+      } else if (geminiResponse.status === 401) {
+        errorMessage = "Authentication error. TTS service is temporarily unavailable.";
+      } else if (geminiResponse.status === 403) {
+        errorMessage = "Access forbidden. TTS service may be temporarily unavailable.";
+      } else if (geminiResponse.status === 400) {
+        const errorData = await geminiResponse.json().catch(() => null);
+        if (errorData?.error?.message) {
+          errorMessage = `Bad request: ${errorData.error.message}`;
+        } else {
+          errorMessage = "Bad request. Please check your input text and selected model.";
+        }
+      } else if (geminiResponse.status >= 500) {
+        errorMessage = "Server error. TTS service may be temporarily unavailable. Please try again later.";
+      }
+      
+      return res.status(geminiResponse.status >= 500 ? 500 : 400).json({
+        success: false,
+        error: 'TTS API error',
+        message: errorMessage
+      });
+    }
+
+    const data = await geminiResponse.json();
+    
+    if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+      const audioData = data.candidates[0].content.parts[0].inlineData?.data;
+      
+      if (audioData) {
+        return res.json({
+          success: true,
+          audioData: audioData,
+          text: trimmedText,
+          model: selectedModel,
+          voice: selectedVoice
+        });
+      }
+    }
+
+    // If no audio data found, return an error
+    return res.status(500).json({
+      success: false,
+      error: 'No audio generated',
+      message: 'TTS service did not return audio data. Please try again.'
+    });
+
+  } catch (error) {
+    console.error('TTS API error:', error);
+    
+    if (error instanceof Error) {
+      if (error.message.includes('fetch')) {
+        return res.status(500).json({
+          success: false,
+          error: 'Network error',
+          message: 'Unable to connect to TTS service. Please check your internet connection and try again.'
+        });
+      }
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: 'An unexpected error occurred. Please try again later.'
+    });
+  }
+});
 
 // Translation endpoint
 app.post('/api/translate', translateRateLimit, async (req, res) => {
