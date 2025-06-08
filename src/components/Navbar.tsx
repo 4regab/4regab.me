@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Home, User, FolderOpen, Wrench, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import { navigateToSubdomain } from "@/lib/subdomain-utils";
@@ -145,26 +145,34 @@ const Navbar = () => {
         }, 100);
       }
     }
-  }, [location.hash, location.pathname]);
-  const menuItems = [
-    { name: "Home", href: "/", handler: handleHomeClick },
-    { name: "Tools", href: "/tools", handler: handleToolsClick },
+  }, [location.hash, location.pathname]);  const menuItems = [
+    { name: "Home", href: "/", handler: handleHomeClick, icon: Home },
+    { name: "Tools", href: "/tools", handler: handleToolsClick, icon: Wrench },
   ];
 
-  return (
-    <nav
+  return (    <nav
       className={cn(
-        "fixed top-0 left-0 w-full z-50 transition-all duration-300",
-        scrolled ? "bg-background/90 backdrop-blur-md py-2 shadow-md" : "py-4"
+        "fixed top-0 left-0 w-full z-50 transition-all duration-500",
+        scrolled 
+          ? "neo-card-glass py-2 shadow-[0_8px_32px_rgba(0,0,0,0.3)] border-b border-white/10" 
+          : "py-4 bg-transparent"
       )}
     >
-      <div className="container mx-auto px-4 flex justify-between items-center">
-        <Link to="/" onClick={handleHomeClick} className="font-bold text-xl font-display relative group">
-          <span className="bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink bg-clip-text text-transparent">
-            4REGAB
-          </span>
-          <span className="absolute -inset-1 -z-10 opacity-0 group-hover:opacity-100 blur-md bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink rounded-lg transition-opacity duration-500"></span>
-        </Link>        <div className="hidden md:flex items-center space-x-8">
+      <div className="container mx-auto px-4 flex justify-between items-center">        <Link to="/" onClick={handleHomeClick} className="relative group">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-neon-blue-500/20 via-neon-purple-500/20 to-neon-pink-500/20 border border-neon-blue-500/30 flex items-center justify-center backdrop-blur-sm group-hover:border-neon-blue-500/50 transition-all duration-300">
+              <span className="text-neon-blue-400 font-bold text-lg">4</span>
+            </div>
+            <div className="font-bold text-xl font-display">
+              <span className="bg-gradient-to-r from-neon-blue-400 via-neon-purple-400 to-neon-pink-400 bg-clip-text text-transparent">
+                REGAB
+              </span>
+            </div>
+          </div>
+          <div className="absolute -inset-2 -z-10 opacity-0 group-hover:opacity-20 blur-lg bg-gradient-to-r from-neon-blue-500 via-neon-purple-500 to-neon-pink-500 rounded-xl transition-all duration-500"></div>
+        </Link>
+
+        <div className="hidden md:flex items-center space-x-6">
           {menuItems.map((item) => {
             let isActive = false;
             const currentSubdomain = getCurrentSubdomain();
@@ -175,21 +183,27 @@ const Navbar = () => {
               isActive = currentSubdomain === 'tools' || location.pathname.startsWith('/tools');
             }
             
-            return (
-              <button
+            return (              <button
                 key={item.name}
                 onClick={item.handler}
                 className={cn(
-                  "relative transition-all duration-300 px-2 py-1 text-sm font-medium",
+                  "relative transition-all duration-300 px-6 py-3 text-sm font-medium rounded-xl group flex items-center space-x-3",
                   isActive 
-                    ? "neon-text font-medium" 
-                    : "hover:neon-text",
-                  "after:content-[''] after:absolute after:w-full after:scale-x-0 after:h-0.5 after:bottom-0 after:left-0 after:bg-neon-blue after:origin-bottom-right after:transition-transform after:duration-300 hover:after:scale-x-100 hover:after:origin-bottom-left"
+                    ? "text-neon-blue-400 bg-neon-blue-500/10 border border-neon-blue-500/30 shadow-[0_0_20px_rgba(0,212,255,0.3)]" 
+                    : "text-foreground/80 hover:text-neon-blue-400 hover:bg-white/5 border border-transparent hover:border-white/10",
+                  "focus-ring"
                 )}
               >
-                {item.name === 'Tools' && (currentSubdomain === 'tools' || location.pathname.startsWith('/tools')) ? 'Tools' : item.name}
+                <item.icon size={18} className={cn(
+                  "transition-all duration-300",
+                  isActive ? "text-neon-blue-400" : "text-foreground/60 group-hover:text-neon-blue-400"
+                )} />
+                <span className="relative z-10 font-display">{item.name}</span>
+                {!isActive && (
+                  <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-neon-blue-500/0 via-neon-purple-500/0 to-neon-pink-500/0 group-hover:from-neon-blue-500/5 group-hover:via-neon-purple-500/5 group-hover:to-neon-pink-500/5 transition-all duration-300"></span>
+                )}
                 {isActive && (
-                  <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-neon-blue animate-pulse"></span>
+                  <div className="absolute -right-2 top-1/2 transform -translate-y-1/2 w-1 h-6 bg-gradient-to-b from-neon-blue-500 to-neon-purple-500 rounded-full"></div>
                 )}
               </button>
             );
@@ -198,51 +212,60 @@ const Navbar = () => {
 
         {/* Mobile Menu Button */}
         <button
-          className="md:hidden p-2 rounded-full hover:bg-white/5 transition-colors duration-200"
+          className="md:hidden p-3 rounded-xl hover:bg-white/10 border border-transparent hover:border-white/20 transition-all duration-300 group focus-ring"
           onClick={() => setIsOpen(!isOpen)}
           aria-label={isOpen ? "Close menu" : "Open menu"}
         >
           {isOpen ? (
-            <X size={24} className="neon-text transition-all duration-300 rotate-90" />
+            <X size={20} className="text-neon-pink transition-all duration-300 rotate-90 group-hover:scale-110" />
           ) : (
-            <Menu size={24} className="neon-text transition-all duration-300" />
+            <Menu size={20} className="text-neon-blue transition-all duration-300 group-hover:scale-110" />
           )}
         </button>
       </div>
 
-      {/* Mobile Menu Panel */}
+      {/* Enhanced Mobile Menu Panel */}
       <div className={cn(
-        "md:hidden absolute top-full left-0 right-0 bg-background/95 backdrop-blur-md border-b border-white/10 py-4 px-4 transform transition-all duration-500 ease-in-out",
-        isOpen ? "translate-y-0 opacity-100" : "translate-y-[-10px] opacity-0 pointer-events-none"
-      )}>        <div className="flex flex-col space-y-4">
-          {menuItems.map((item) => {
-            let isActive = false;
-            const currentSubdomain = getCurrentSubdomain();
-            
-            if (item.name === 'Home') {
-              isActive = !currentSubdomain && location.pathname === '/';
-            } else if (item.name === 'Tools') {
-              isActive = currentSubdomain === 'tools' || location.pathname.startsWith('/tools');
-            }
-            
-            return (
-              <button
-                key={item.name}
-                onClick={item.handler}
-                className={cn(
-                  "p-2 rounded-sm transition-all duration-300 transform text-left",
-                  isActive 
-                    ? "neon-text bg-white/5 font-medium translate-x-2" 
-                    : "hover:neon-text hover:bg-white/5 hover:translate-x-2"
-                )}
-              >
-                {item.name}
-                {isActive && (
-                  <span className="ml-2 inline-block w-2 h-2 rounded-full bg-neon-blue"></span>
-                )}
-              </button>
-            );
-          })}
+        "md:hidden absolute top-full left-0 right-0 transition-all duration-500 ease-out",
+        isOpen ? "translate-y-0 opacity-100" : "translate-y-[-20px] opacity-0 pointer-events-none"
+      )}>
+        <div className="neo-card-glass m-4 rounded-2xl border border-white/20 shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
+          <div className="p-6 space-y-1">
+            {menuItems.map((item, index) => {
+              let isActive = false;
+              const currentSubdomain = getCurrentSubdomain();
+              
+              if (item.name === 'Home') {
+                isActive = !currentSubdomain && location.pathname === '/';
+              } else if (item.name === 'Tools') {
+                isActive = currentSubdomain === 'tools' || location.pathname.startsWith('/tools');
+              }
+                return (
+                <button
+                  key={item.name}
+                  onClick={item.handler}
+                  className={cn(
+                    "w-full p-5 rounded-xl transition-all duration-300 text-left group flex items-center space-x-4",
+                    "animate-slide-up",
+                    isActive 
+                      ? "text-neon-blue-400 bg-neon-blue-500/10 border border-neon-blue-500/30 shadow-[0_0_20px_rgba(0,212,255,0.2)]" 
+                      : "text-foreground/80 hover:text-neon-purple-400 hover:bg-white/5 border border-transparent hover:border-white/10",
+                    "focus-ring"
+                  )}
+                  style={{ animationDelay: `${index * 0.1}s` }}
+                >
+                  <item.icon size={20} className={cn(
+                    "transition-all duration-300",
+                    isActive ? "text-neon-blue-400" : "text-foreground/60 group-hover:text-neon-purple-400"
+                  )} />
+                  <span className="font-medium font-display flex-1">{item.name}</span>
+                  {isActive && (
+                    <div className="w-2 h-2 rounded-full bg-neon-blue-500 animate-glow-pulse"></div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </nav>

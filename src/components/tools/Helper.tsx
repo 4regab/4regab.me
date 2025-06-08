@@ -1073,412 +1073,530 @@ const Helper = () => {
         variant: "destructive"
       });
     }  }, [messages, toast, selectedAgent, selectedModel]);
-
   return (
-    <div className="flex flex-col h-full bg-background" {...getRootProps()}>
-      {/* Header: Agent/Model Select, API Key, Clear Chat */}
-      <header className="flex items-center justify-between p-3 border-b border-border sticky top-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-10">
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Agent Select */}
-          <Select
-            value={selectedAgent.id}
-            onValueChange={(value) => {
-              const agent = HELPER_AGENTS.find(a => a.id === value);
-              if (agent) setSelectedAgent(agent);
-            }}
-          >            <SelectTrigger className="w-auto h-9 text-xs sm:text-sm px-2 sm:px-3 min-w-[120px] max-w-[200px]">
-              <div className="flex items-center gap-1.5 truncate">
-                {React.createElement(getAgentIcon(selectedAgent.icon), { className: "h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0"})}
-                <span className="truncate">{selectedAgent.name}</span>
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              {HELPER_AGENTS.map((agent) => {
-                const IconComponent = getAgentIcon(agent.icon);
-                return (
-                  <SelectItem key={agent.id} value={agent.id}>
-                    <div className="flex items-center gap-2">
-                      <IconComponent size={16} />
-                      <span>{agent.name}</span>
-                    </div>
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-
-          {/* Model Select */}
-          <Select
-            value={selectedModel.id}            onValueChange={(value) => {
-              const model = getModelById(value);
-              if (model) {
-                setSelectedModel(model);
-                // Automatically disable thinking mode if the new model doesn't support it
-                if (isThinkingMode && !supportsThinking(model)) {
-                  setIsThinkingMode(false);
-                  toast({
-                    title: "Thinking mode disabled",
-                    description: `${model.name} doesn't support thinking mode. Switched to regular mode.`,
-                    variant: "default"
-                  });
-                }
-              }
-            }}
-          >
-            <SelectTrigger className="w-auto h-9 text-xs sm:text-sm px-2 sm:px-3 min-w-[120px] max-w-[200px]">
-               <div className="flex items-center gap-1.5 truncate">
-                <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                <span className="truncate hidden sm:inline">{selectedModel.name}</span>
-                <span className="truncate sm:hidden">Model</span>
-              </div>
-            </SelectTrigger>            <SelectContent>
-              {GEMINI_MODELS.map((model) => (
-                <SelectItem key={model.id} value={model.id}>
-                  <div className="flex items-center gap-2 w-full">
-                    <span className="font-medium text-sm">{model.name}</span>                      {model.provider === 'openrouter' ? (
-                        <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-700 border-purple-200">
-                          No Search
-                        </Badge>
-                      ) : model.supportsGrounding ? (
-                        <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-700 border-blue-200">
-                          Web Search
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-700 border-purple-200">
-                          No Search
-                        </Badge>
-                      )}
+    <div className="min-h-screen bg-background relative overflow-hidden" {...getRootProps()}>
+      {/* Advanced Background Effects */}
+      <div className="absolute inset-0 bg-gradient-to-br from-neon-purple/5 via-transparent to-neon-blue/5" />
+      <div className="absolute top-0 right-1/4 w-96 h-96 bg-neon-green/3 rounded-full blur-3xl animate-pulse-slow" />
+      <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-neon-orange/3 rounded-full blur-3xl animate-pulse-slow delay-1000" />
+      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-neon-purple/2 rounded-full blur-2xl" />
+      
+      {/* Glassmorphic Container */}
+      <div className="relative z-10 min-h-screen">
+        <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
+          {/* Modern Hero Section */}
+          <div className="relative mb-8">
+            <div className="glass-card border border-white/10 backdrop-blur-xl bg-gradient-to-br from-white/5 to-white/[0.02] rounded-3xl p-8 text-center shadow-2xl">
+              <div className="flex items-center justify-center gap-4 mb-4">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-neon-purple/30 rounded-2xl blur-lg animate-pulse" />
+                  <div className="relative p-4 rounded-2xl bg-gradient-to-br from-neon-purple/20 to-neon-blue/20 border border-neon-purple/30">
+                    <Brain className="text-neon-purple w-8 h-8 sm:w-10 sm:h-10" />
                   </div>
-                </SelectItem>
-              ))}            </SelectContent>
-          </Select>
-        </div>
-          <div className="flex items-center gap-1 sm:gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={clearConversation}
-            className="h-9 w-9 text-muted-foreground hover:text-destructive"
-            title="Delete Chat"
-          >
-            <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
-          </Button>
-        </div>
-      </header>
-
-      {/* Messages Area */}
-      <ScrollArea className="flex-1 p-0" id="messages-scroll-area">
-         <div className="max-w-4xl mx-auto px-2 sm:px-4 pb-4"> {/* Added pb-4 for spacing from input */}
-          {messages.length === 0 && uploadedFiles.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full pt-16 text-center">
-              <Bot className="h-16 w-16 text-muted-foreground/50 mb-6" />
-              <h3 className="text-xl font-semibold text-muted-foreground mb-2">What can I help with?</h3>
-              <p className="text-sm text-muted-foreground max-w-md">
-                Ask questions, upload files for analysis, or get assistance with various tasks.
-                Start by typing a message or attaching files below.
+                </div>
+                <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-neon-purple via-neon-blue to-neon-green bg-clip-text text-transparent">
+                  AI Assistant
+                </h1>
+              </div>
+              <p className="text-lg sm:text-xl text-foreground/80 leading-relaxed max-w-3xl mx-auto mb-6">
+                Your intelligent companion for analysis, research, coding, writing, and creative tasks
               </p>
+              
+              {/* Feature Pills */}
+              <div className="flex flex-wrap justify-center gap-3 mb-6">
+                <div className="glass-pill bg-neon-green/10 border border-neon-green/20 text-neon-green">
+                  <Zap className="w-4 h-4" />
+                  <span>Smart Analysis</span>
+                </div>
+                <div className="glass-pill bg-neon-purple/10 border border-neon-purple/20 text-neon-purple">
+                  <Bot className="w-4 h-4" />
+                  <span>AI Powered</span>
+                </div>
+                <div className="glass-pill bg-neon-blue/10 border border-neon-blue/20 text-neon-blue">
+                  <FileText className="w-4 h-4" />
+                  <span>File Support</span>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-6 pt-6"> {/* Added pt-6 */}
-              {messages.map((message) => (                <div key={message.id} className="group">                  <div className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'} items-start`}>                    {message.type === 'assistant' && (message.isLoading || message.isThinking) && (
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-r from-primary/20 to-primary/10 flex items-center justify-center mt-1 border border-primary/20">
-                        <div className="relative">
-                          <Bot className="h-4 w-4 text-primary animate-pulse" />
-                          <div className="absolute inset-0 animate-ping">
-                            <Bot className="h-4 w-4 text-primary opacity-30" />
+          </div>
+
+          {/* Main Chat Interface Card */}
+          <div className="glass-card border border-white/10 backdrop-blur-xl bg-gradient-to-br from-white/5 to-white/[0.02] rounded-3xl overflow-hidden shadow-2xl">            <div className="flex flex-col h-[70vh] min-h-[600px]">
+              {/* Modern Header with Controls */}
+              <div className="border-b border-white/10 bg-gradient-to-r from-neon-purple/5 via-neon-blue/5 to-neon-green/5 p-4">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {/* Agent Select */}
+                    <div className="relative">
+                      <Select
+                        value={selectedAgent.id}
+                        onValueChange={(value) => {
+                          const agent = HELPER_AGENTS.find(a => a.id === value);
+                          if (agent) setSelectedAgent(agent);
+                        }}
+                      >
+                        <SelectTrigger className="glass-input min-w-[160px] h-10">
+                          <div className="flex items-center gap-2 truncate">
+                            {React.createElement(getAgentIcon(selectedAgent.icon), { className: "h-4 w-4 flex-shrink-0 text-neon-purple"})}
+                            <span className="truncate font-medium">{selectedAgent.name}</span>
                           </div>
+                        </SelectTrigger>
+                        <SelectContent className="glass-dropdown">
+                          {HELPER_AGENTS.map((agent) => {
+                            const IconComponent = getAgentIcon(agent.icon);
+                            return (
+                              <SelectItem key={agent.id} value={agent.id} className="hover:bg-neon-purple/10">
+                                <div className="flex items-center gap-2">
+                                  <IconComponent className="w-4 h-4 text-neon-purple" />
+                                  <span>{agent.name}</span>
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Model Select */}
+                    <div className="relative">
+                      <Select
+                        value={selectedModel.id}
+                        onValueChange={(value) => {
+                          const model = getModelById(value);
+                          if (model) {
+                            setSelectedModel(model);
+                            if (isThinkingMode && !supportsThinking(model)) {
+                              setIsThinkingMode(false);
+                              toast({
+                                title: "Thinking mode disabled",
+                                description: `${model.name} doesn't support thinking mode. Switched to regular mode.`,
+                                variant: "default"
+                              });
+                            }
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="glass-input min-w-[180px] h-10">
+                          <div className="flex items-center gap-2 truncate">
+                            <Bot className="h-4 w-4 flex-shrink-0 text-neon-blue" />
+                            <span className="truncate font-medium">{selectedModel.name}</span>
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent className="glass-dropdown">
+                          {GEMINI_MODELS.map((model) => (
+                            <SelectItem key={model.id} value={model.id} className="hover:bg-neon-blue/10">
+                              <div className="flex items-center gap-2 w-full">
+                                <span className="font-medium">{model.name}</span>
+                                {model.provider === 'openrouter' ? (
+                                  <Badge variant="outline" className="neon-badge-purple">
+                                    No Search
+                                  </Badge>
+                                ) : model.supportsGrounding ? (
+                                  <Badge variant="outline" className="neon-badge-blue">
+                                    Web Search
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="neon-badge-purple">
+                                    No Search
+                                  </Badge>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Thinking Mode Toggle - Only show for compatible models */}
+                    {supportsThinking(selectedModel) && (
+                      <Button
+                        variant={isThinkingMode ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setIsThinkingMode(!isThinkingMode)}
+                        disabled={isProcessing}
+                        className={cn(
+                          "glass-button h-10 px-4",
+                          isThinkingMode 
+                            ? "bg-neon-purple/20 border-neon-purple/30 text-neon-purple hover:bg-neon-purple/30" 
+                            : "hover:bg-neon-purple/10 hover:border-neon-purple/20"
+                        )}
+                      >
+                        <Brain className="w-4 h-4 mr-2" />
+                        <span className="hidden sm:inline">Thinking Mode</span>
+                        <span className="sm:hidden">Think</span>
+                      </Button>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearConversation}
+                      className="glass-button hover:bg-red-500/10 hover:border-red-500/20 hover:text-red-400 h-10"
+                      title="Clear conversation"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span className="hidden sm:inline ml-2">Clear</span>
+                    </Button>
+                  </div>
+                </div>              </div>
+
+              {/* Messages Area with Modern Design */}
+              <ScrollArea className="flex-1 p-0">
+                <div className="p-6">
+                  {messages.length === 0 && uploadedFiles.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center">
+                      <div className="relative mb-8">
+                        <div className="absolute inset-0 bg-neon-blue/20 rounded-full blur-xl animate-pulse" />
+                        <div className="relative p-6 rounded-full bg-gradient-to-br from-neon-blue/20 to-neon-purple/20 border border-neon-blue/30">
+                          <Bot className="h-12 w-12 text-neon-blue" />
                         </div>
                       </div>
-                    )}
-                    
-                    <div className={`max-w-[85%] sm:max-w-[80%] ${message.type === 'user' ? 'order-1' : ''}`}>
-                      <div className={cn(
-                        "rounded-xl p-3 sm:p-4 shadow-sm",
-                        message.type === 'user' 
-                          ? 'bg-primary text-primary-foreground ml-auto' // Removed ml-12, rely on justify-end
-                          : 'bg-muted'
-                      )}>                        {message.isLoading ? (
-                          <div className="flex items-center gap-2">
-                            <Bot className="h-4 w-4 text-primary animate-spin" style={{ animationDuration: '2s' }} />
-                            <span className="text-sm text-muted-foreground">
-                              {message.isThinkingMode ? 'Thinking...' : 'Generating response...'}
-                            </span>
-                          </div>                        ) : message.isThinking ? (<div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <Brain className="h-4 w-4 text-primary animate-pulse" />
-                              <span className="text-sm text-muted-foreground">Thinking process</span>
-                            </div>
-                            <div className="bg-muted/50 border border-border/30 rounded-lg p-3">
-                              <div className="whitespace-pre-wrap text-sm leading-relaxed break-words text-muted-foreground">
-                                {cleanResponseFormatting(message.thinkingProcess)}
-                                <span className="animate-pulse">▊</span>
-                              </div>
-                            </div>
-                          </div>                        ) : (
-                          <div className="space-y-3">                            {/* Show thinking process only when actively thinking */}
-                            {message.isThinkingMode && message.thinkingProcess && message.isThinking && (
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <Brain className="h-4 w-4 text-primary animate-pulse" />
-                                  <span className="text-sm text-muted-foreground">Thinking process</span>
-                                </div>
-                                <div className="bg-muted/50 border border-border/30 rounded-lg p-3">
-                                  <div className="whitespace-pre-wrap text-sm leading-relaxed break-words text-muted-foreground">
-                                    {cleanResponseFormatting(message.thinkingProcess)}
+                      <h3 className="text-2xl font-bold text-foreground mb-3">Ready to Assist</h3>
+                      <p className="text-lg text-foreground/70 max-w-lg leading-relaxed mb-8">
+                        Ask questions, upload files for analysis, or get help with any task
+                      </p>
+                      
+                      {/* Capability Cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl">
+                        <div className="glass-card p-6 text-center border border-neon-green/20 hover:border-neon-green/40 transition-all duration-300 hover:shadow-lg hover:shadow-neon-green/10">
+                          <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-neon-green/20 flex items-center justify-center">
+                            <Zap className="w-6 h-6 text-neon-green" />
+                          </div>
+                          <h4 className="font-semibold text-neon-green mb-2">Smart Analysis</h4>
+                          <p className="text-sm text-foreground/60">Data analysis, research, and insights from any content</p>
+                        </div>
+                        
+                        <div className="glass-card p-6 text-center border border-neon-purple/20 hover:border-neon-purple/40 transition-all duration-300 hover:shadow-lg hover:shadow-neon-purple/10">
+                          <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-neon-purple/20 flex items-center justify-center">
+                            <Bot className="w-6 h-6 text-neon-purple" />
+                          </div>
+                          <h4 className="font-semibold text-neon-purple mb-2">Code & Development</h4>
+                          <p className="text-sm text-foreground/60">Programming help, code review, and technical guidance</p>
+                        </div>
+                        
+                        <div className="glass-card p-6 text-center border border-neon-orange/20 hover:border-neon-orange/40 transition-all duration-300 hover:shadow-lg hover:shadow-neon-orange/10 sm:col-span-2 lg:col-span-1">
+                          <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-neon-orange/20 flex items-center justify-center">
+                            <FileText className="w-6 h-6 text-neon-orange" />
+                          </div>
+                          <h4 className="font-semibold text-neon-orange mb-2">Content Creation</h4>
+                          <p className="text-sm text-foreground/60">Writing, editing, and creative content assistance</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {messages.map((message) => (
+                        <div key={message.id} className="group">
+                          <div className={`flex gap-4 ${message.type === 'user' ? 'justify-end' : 'justify-start'} items-start`}>
+                            {/* Assistant Avatar */}
+                            {message.type === 'assistant' && (
+                              <div className="flex-shrink-0">
+                                {message.isLoading || message.isThinking ? (
+                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-neon-purple/20 to-neon-blue/20 border border-neon-purple/30 flex items-center justify-center">
+                                    <Bot className="h-5 w-5 text-neon-purple animate-pulse" />
                                   </div>
-                                </div>
-                              </div>
-                            )}{/* Main content (final answer in reasoning mode, or full content otherwise) */}
-                            <div className="space-y-2">
-                              {(() => {
-                                const contentToRender = message.isThinkingMode ? (message.finalAnswer || message.content) : message.content;
-                                
-                                // Don't apply aggressive cleaning to main content - let MessageContent handle code formatting
-                                return (
-                                  <MessageContent 
-                                    content={contentToRender}
-                                  />
-                                );
-                              })()}                            </div>
-                            
-                            {message.files && message.files.length > 0 && (
-                              <div className="space-y-2 border-t border-border/50 pt-3 mt-3">
-                                <p className="text-xs opacity-80">Attached files:</p>                                {message.files.map((file, index) => (
-                                  <div key={index} className="flex items-center gap-2 text-xs bg-black/10 dark:bg-white/5 p-1.5 rounded">
-                                    <FileType className="h-3.5 w-3.5 opacity-70" />
-                                    <span className="truncate" title={file.name}>
-                                      {truncateFilename(file.name)}
-                                    </span>
-                                    <Badge variant="outline" className="text-xs px-1.5 py-0.5">
-                                      {formatFileSize(file.size)}
-                                    </Badge>
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-neon-blue/20 to-neon-purple/20 border border-neon-blue/30 flex items-center justify-center">
+                                    <Bot className="h-5 w-5 text-neon-blue" />
                                   </div>
-                                ))}
+                                )}
                               </div>
                             )}
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className={`flex items-center gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-muted-foreground ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <span>{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}</span>                        {message.type === 'assistant' && !message.isLoading && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {                              const contentToCopy = message.isThinkingMode 
-                                ? (message.finalAnswer || message.content) // Only copy final answer for thinking mode
-                                : message.content;
-                              copyMessage(contentToCopy);
-                            }}
-                              className="h-6 w-6"
-                              title="Copy message"
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>                            {/* Show regenerate and export buttons only for the last assistant message */}
-                            {message.id === messages[messages.length - 1]?.id && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={regenerateLastResponse}
-                                  disabled={isProcessing}
-                                  className="h-6 w-6"
-                                  title="Regenerate response"
-                                >
-                                  {isProcessing ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <RotateCcw className="h-3 w-3" />
-                                  )}
-                                </Button>                                {/* Check if this is an image generation model and show appropriate download */}
-                                {message.model?.supportsImageGeneration && 
-                                 message.content && 
-                                 (message.content.includes('![') || message.content.includes('<img') || message.content.includes('data:image/')) ? (
-                                  // Show image download for image generation
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => {
-                                      // Extract and download image from message content
-                                      const imgMatch = message.content.match(/!\[.*?\]\((.*?)\)|<img.*?src="(.*?)"/);
-                                      if (imgMatch) {
-                                        const imageUrl = imgMatch[1] || imgMatch[2];
-                                        const link = document.createElement('a');
-                                        link.href = imageUrl;
-                                        link.download = `generated-image-${Date.now()}.png`;
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
-                                      }
-                                    }}
-                                    className="h-6 w-6"
-                                    title="Download generated image"
-                                  >
-                                    <Download className="h-3 w-3" />
-                                  </Button>
+
+                            {/* Message Content */}
+                            <div className={`max-w-[85%] ${message.type === 'user' ? 'order-1' : ''}`}>
+                              <div className={cn(
+                                "rounded-2xl p-4 shadow-lg backdrop-blur-sm",
+                                message.type === 'user' 
+                                  ? 'bg-gradient-to-br from-neon-purple/20 to-neon-blue/20 border border-neon-purple/30 ml-auto text-foreground' 
+                                  : 'glass-card border border-white/10'
+                              )}>
+                                {message.isLoading ? (
+                                  <div className="flex items-center gap-3">
+                                    <div className="relative">
+                                      <Bot className="h-5 w-5 text-neon-purple animate-spin" style={{ animationDuration: '2s' }} />
+                                      <div className="absolute inset-0 bg-neon-purple/20 rounded-full blur animate-pulse" />
+                                    </div>
+                                    <span className="text-foreground/80">
+                                      {message.isThinkingMode ? 'Thinking deeply...' : 'Generating response...'}
+                                    </span>
+                                  </div>
+                                ) : message.isThinking ? (
+                                  <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                      <Brain className="h-5 w-5 text-neon-purple animate-pulse" />
+                                      <span className="text-sm font-medium text-neon-purple">Thinking Process</span>
+                                    </div>
+                                    <div className="glass-card bg-neon-purple/5 border border-neon-purple/20 rounded-xl p-4">
+                                      <div className="whitespace-pre-wrap text-sm leading-relaxed break-words text-foreground/80">
+                                        {cleanResponseFormatting(message.thinkingProcess)}
+                                        <span className="animate-pulse text-neon-purple">▊</span>
+                                      </div>
+                                    </div>
+                                  </div>
                                 ) : (
-                                  // Show PDF/DOCX export for text responses
+                                  <div className="space-y-3">
+                                    {/* Show completed thinking process if available */}
+                                    {message.isThinkingMode && message.thinkingProcess && !message.isThinking && (
+                                      <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                          <Brain className="h-5 w-5 text-neon-purple" />
+                                          <span className="text-sm font-medium text-neon-purple">Reasoning</span>
+                                        </div>
+                                        <div className="glass-card bg-neon-purple/5 border border-neon-purple/20 rounded-xl p-4">
+                                          <div className="whitespace-pre-wrap text-sm leading-relaxed break-words text-foreground/80">
+                                            {cleanResponseFormatting(message.thinkingProcess)}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Main content */}
+                                    <div className="space-y-2">
+                                      {(() => {
+                                        const contentToRender = message.isThinkingMode ? (message.finalAnswer || message.content) : message.content;
+                                        return (
+                                          <MessageContent 
+                                            content={contentToRender}
+                                          />
+                                        );
+                                      })()}
+                                    </div>
+                                    
+                                    {/* Attached files display */}
+                                    {message.files && message.files.length > 0 && (
+                                      <div className="space-y-2 border-t border-white/10 pt-3 mt-3">
+                                        <p className="text-xs text-foreground/60">Attached files:</p>
+                                        <div className="flex flex-wrap gap-2">
+                                          {message.files.map((file, index) => (
+                                            <div key={index} className="glass-pill bg-neon-blue/10 border border-neon-blue/20 text-neon-blue">
+                                              <FileType className="h-3 w-3" />
+                                              <span className="text-xs truncate max-w-[100px]" title={file.name}>
+                                                {truncateFilename(file.name)}
+                                              </span>
+                                              <span className="text-xs text-foreground/50">({formatFileSize(file.size)})</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Message Actions */}
+                              <div className={`flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-foreground/60 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                <span>{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}</span>
+                                {message.type === 'assistant' && !message.isLoading && (
                                   <>
                                     <Button
                                       variant="ghost"
-                                      size="icon"
-                                      onClick={exportLatestResponseAsPDF}
-                                      className="h-6 w-6"
-                                      title="Export as PDF"
+                                      size="sm"
+                                      onClick={() => {
+                                        const contentToCopy = message.isThinkingMode 
+                                          ? (message.finalAnswer || message.content)
+                                          : message.content;
+                                        copyMessage(contentToCopy);
+                                      }}
+                                      className="h-6 w-6 p-0 hover:bg-neon-blue/10"
+                                      title="Copy message"
                                     >
-                                      <Download className="h-3 w-3" />
+                                      <Copy className="h-3 w-3" />
                                     </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={exportLatestResponseAsDOCX}
-                                      className="h-6 w-6"
-                                      title="Export as DOCX"
-                                    >
-                                      <FileText className="h-3 w-3" />
-                                    </Button>
+                                    
+                                    {/* Show actions only for the last assistant message */}
+                                    {message.id === messages[messages.length - 1]?.id && (
+                                      <>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={regenerateLastResponse}
+                                          disabled={isProcessing}
+                                          className="h-6 w-6 p-0 hover:bg-neon-green/10"
+                                          title="Regenerate response"
+                                        >
+                                          {isProcessing ? (
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                          ) : (
+                                            <RotateCcw className="h-3 w-3" />
+                                          )}
+                                        </Button>
+                                        
+                                        {/* Export buttons */}
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={exportLatestResponseAsPDF}
+                                          className="h-6 w-6 p-0 hover:bg-neon-orange/10"
+                                          title="Export as PDF"
+                                        >
+                                          <Download className="h-3 w-3" />
+                                        </Button>
+                                      </>
+                                    )}
                                   </>
                                 )}
-                              </>
+                                {message.agent && (
+                                  <Badge variant="outline" className="neon-badge-purple text-xs px-2 py-0.5">
+                                    {React.createElement(getAgentIcon(message.agent.icon), { className: "h-3 w-3 mr-1 inline-block" })}
+                                    {message.agent.name}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* User Avatar */}
+                            {message.type === 'user' && (
+                              <div className="flex-shrink-0">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-neon-green/20 to-neon-blue/20 border border-neon-green/30 flex items-center justify-center">
+                                  <User className="h-5 w-5 text-neon-green" />
+                                </div>
+                              </div>
                             )}
-                          </>
-                        )}
-                        {message.agent && (
-                          <Badge variant="outline" className="text-xs px-1.5 py-0.5 font-normal">
-                            {React.createElement(getAgentIcon(message.agent.icon), { className: "h-3 w-3 mr-1 inline-block" })}
-                            {message.agent.name}
-                          </Badge>
-                        )}                      </div>
+                          </div>
+                        </div>
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  )}
+                </div>              </ScrollArea>
+
+              {/* Modern Input Area */}
+              <div className="border-t border-white/10 bg-gradient-to-r from-white/5 to-white/[0.02] backdrop-blur-sm p-6">
+                {/* Staged Files Display */}
+                {uploadedFiles.length > 0 && (
+                  <div className="mb-4 p-4 glass-card border border-neon-blue/20 rounded-xl">
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileType className="h-4 w-4 text-neon-blue" />
+                      <span className="text-sm font-medium text-neon-blue">Attached Files</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {uploadedFiles.map((file, index) => (
+                        <div key={index} className="glass-pill bg-neon-blue/10 border border-neon-blue/20 text-neon-blue pr-1">
+                          <FileType className="h-3 w-3" />
+                          <span className="text-sm truncate max-w-[120px]" title={file.name}>
+                            {truncateFilename(file.name)}
+                          </span>
+                          <span className="text-xs text-foreground/50">({formatFileSize(file.size)})</span>
+                          <button
+                            onClick={() => removeStagedFile(index)}
+                            className="ml-2 p-1 rounded-full hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                            title={`Remove ${file.name}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    {isUploading && (
+                      <div className="flex items-center gap-2 mt-3 text-sm text-neon-blue">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Uploading... ({uploadProgress.toFixed(0)}%)</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Thinking Mode Indicator */}
+                {isThinkingMode && (
+                  <div className="mb-4 p-4 glass-card border border-neon-purple/20 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <Brain className="h-5 w-5 text-neon-purple animate-pulse" />
+                      <div>
+                        <span className="text-sm font-medium text-neon-purple">Thinking Mode Active</span>
+                        <p className="text-xs text-foreground/60">AI will show step-by-step reasoning process</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-        </div>
-      </ScrollArea>
-
-      {/* Input Area - New Design */}
-      <div className="border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky bottom-0 z-10">
-        <div className="max-w-4xl mx-auto p-3 sm:p-4">
-          {/* Staged Files Display */}
-          {uploadedFiles.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-2 items-center max-h-24 overflow-y-auto p-2 bg-muted/50 rounded-md">              {uploadedFiles.map((file, index) => (
-                <Badge key={index} variant="secondary" className="flex items-center gap-1.5 pr-1 group text-xs sm:text-sm bg-muted/80 border-muted-foreground/20 text-foreground">
-                  <FileType className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span className="truncate max-w-[100px] sm:max-w-[150px]" title={file.name}>
-                    {truncateFilename(file.name)}
-                  </span>
-                  <span className="text-muted-foreground/70">({formatFileSize(file.size)})</span>
-                  <button
-                    onClick={() => removeStagedFile(index)}
-                    className="ml-1 opacity-50 group-hover:opacity-100 hover:text-destructive p-0.5 rounded-full hover:bg-destructive/10"
-                    title={`Remove ${file.name}`}
-                  >
-                    <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                  </button>
-                </Badge>
-              ))}
-
-               {isUploading && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  <span>Uploading... ({uploadProgress.toFixed(0)}%)</span>
-                </div>
-              )}
-            </div>          )}          {/* Thinking Mode Indicator */}          {isThinkingMode && (
-            <div className="mb-2 flex items-center gap-2 p-2 bg-primary/10 rounded-md border border-primary/20">
-              <Brain className="h-4 w-4 text-primary animate-pulse" />
-              <span className="text-sm font-medium text-primary">Thinking Mode Active</span>
-              <span className="text-xs text-primary/70">AI will show step-by-step thinking process</span>
-            </div>
-          )}
-
-          <div className="relative flex items-end gap-2 bg-muted/70 rounded-xl p-1.5 sm:p-2 shadow-sm">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={triggerFileInput}
-              disabled={isUploading || isProcessing}
-              className="h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0 text-muted-foreground hover:text-primary"
-              title="Attach files"
-            >
-              {isUploading ? (
-                <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-              ) : (
-                <Paperclip className="h-4 w-4 sm:h-5 sm:w-5" />
-              )}            </Button>
-            
-            {/* Thinking Mode Button - Only show for compatible models */}
-            {supportsThinking(selectedModel) && (
-              <Button
-                variant={isThinkingMode ? "default" : "ghost"}
-                size="icon"
-                onClick={() => {
-                  setIsThinkingMode(!isThinkingMode);
-                }}
-                disabled={isProcessing}
-                className={cn(
-                  "h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0",
-                  isThinkingMode 
-                    ? "bg-primary text-primary-foreground hover:bg-primary/90" 
-                    : "text-muted-foreground hover:text-primary"
                 )}
-                title={
-                  isThinkingMode 
-                    ? "Thinking mode enabled - AI will show step-by-step thinking" 
-                    : "Enable thinking mode"
-                }
-              >
-                <Brain className="h-4 w-4 sm:h-5 sm:w-5" />
-              </Button>
-            )}
-            
-            <Textarea
-              value={currentMessage}
-              onChange={(e) => setCurrentMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={isThinkingMode ? "Ask anything... (thinking mode will show step-by-step thinking)" : "Ask anything..."}
-              className="flex-1 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 resize-none min-h-[24px] max-h-[120px] self-center py-2 sm:py-2.5 px-2 text-sm sm:text-base placeholder:text-muted-foreground/70"
-              disabled={isProcessing || isUploading}
-              rows={1}            />
-            <Button
-              onClick={isProcessing && abortController ? stopGeneration : sendMessage}
-              disabled={!isProcessing && ((!currentMessage.trim() && uploadedFiles.length === 0) || !isServiceInitialized || isUploading)}
-              className={`h-9 w-9 sm:h-10 sm:w-10 p-0 flex-shrink-0 rounded-lg ${isProcessing && abortController ? 'bg-destructive hover:bg-destructive/90' : ''}`}
-              size="icon"
-              title={isProcessing && abortController ? "Stop generation" : "Send message"}
-            >
-              {isProcessing && abortController ? (
-                <Square className="h-4 w-4 sm:h-5 sm:w-5" />
-              ) : isProcessing ? (
-                <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4 sm:h-5 sm:w-5" />
-              )}</Button>
-          </div>
-          
-          {/* User Guidance Reminder */}
-          <div className="text-center mt-2">
-            <p className="text-xs text-muted-foreground/60">
-              AI can make mistakes, so double-check it.
-            </p>
+
+                {/* Input Container */}
+                <div className="relative">
+                  <div className="glass-card border border-white/20 rounded-2xl p-3 bg-gradient-to-r from-white/5 to-white/[0.02]">
+                    <div className="flex items-end gap-3">
+                      {/* File Upload Button */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={triggerFileInput}
+                        disabled={isUploading || isProcessing}
+                        className="glass-button h-10 w-10 p-0 hover:bg-neon-blue/10 hover:border-neon-blue/20"
+                        title="Attach files"
+                      >
+                        {isUploading ? (
+                          <Loader2 className="h-5 w-5 animate-spin text-neon-blue" />
+                        ) : (
+                          <Paperclip className="h-5 w-5 text-foreground/70 hover:text-neon-blue transition-colors" />
+                        )}
+                      </Button>
+                      
+                      {/* Text Input */}
+                      <Textarea
+                        value={currentMessage}
+                        onChange={(e) => setCurrentMessage(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder={isThinkingMode ? "Ask anything... (thinking mode will show reasoning)" : "Ask anything..."}
+                        className="flex-1 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 resize-none min-h-[40px] max-h-[120px] py-2 px-3 text-base placeholder:text-foreground/50"
+                        disabled={isProcessing || isUploading}
+                        rows={1}
+                      />
+                      
+                      {/* Send/Stop Button */}
+                      <Button
+                        onClick={isProcessing && abortController ? stopGeneration : sendMessage}
+                        disabled={!isProcessing && ((!currentMessage.trim() && uploadedFiles.length === 0) || !isServiceInitialized || isUploading)}
+                        size="sm"
+                        className={cn(
+                          "h-10 w-10 p-0 rounded-xl transition-all duration-200",
+                          isProcessing && abortController 
+                            ? 'bg-red-500/20 border-red-500/30 text-red-400 hover:bg-red-500/30' 
+                            : 'glass-button bg-neon-purple/20 border-neon-purple/30 text-neon-purple hover:bg-neon-purple/30'
+                        )}
+                        title={isProcessing && abortController ? "Stop generation" : "Send message"}
+                      >
+                        {isProcessing && abortController ? (
+                          <Square className="h-5 w-5" />
+                        ) : isProcessing ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <Send className="h-5 w-5" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Help Text */}
+                  <div className="text-center mt-3">
+                    <p className="text-xs text-foreground/50">
+                      AI can make mistakes, so double-check important information.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Drag and Drop Overlay */}
       {isDragActive && (
-        <div className="fixed inset-0 bg-primary/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-background border-2 border-dashed border-primary rounded-xl p-8 text-center shadow-2xl max-w-md">
-            <Upload className="h-12 w-12 sm:h-16 sm:w-16 text-primary mx-auto mb-4" />
-            <h3 className="text-lg sm:text-xl font-semibold text-primary mb-2">Drop files to upload</h3>
-            <p className="text-sm text-muted-foreground">Release to add files to your conversation</p>
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-8">
+          <div className="glass-card border border-neon-blue/30 rounded-3xl p-12 text-center shadow-2xl max-w-md bg-gradient-to-br from-neon-blue/10 to-neon-purple/10">
+            <div className="relative mb-6">
+              <div className="absolute inset-0 bg-neon-blue/20 rounded-full blur-xl animate-pulse" />
+              <div className="relative p-6 rounded-full bg-gradient-to-br from-neon-blue/20 to-neon-purple/20 border border-neon-blue/30">
+                <Upload className="h-12 w-12 text-neon-blue" />
+              </div>
+            </div>
+            <h3 className="text-xl font-bold text-neon-blue mb-2">Drop Files to Upload</h3>
+            <p className="text-foreground/70">Release to add files to your conversation</p>
           </div>
         </div>
-      )}      {/* Hidden file input for dropzone and direct click */}
+      )}
+
+      {/* Hidden file input */}
       <input {...getInputProps()} ref={fileInputRef} className="hidden" />
     </div>
   );

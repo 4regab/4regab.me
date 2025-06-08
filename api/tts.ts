@@ -93,11 +93,11 @@ const handler = async (req: VercelRequest, res: VercelResponse) => {
     // Check for API key
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.error('GEMINI_API_KEY not configured');
+      console.error('CRITICAL: GEMINI_API_KEY is not configured in the Vercel environment for the tts function.');
       return res.status(500).json({
         success: false,
-        error: 'Service configuration error',
-        message: 'TTS service is not properly configured'
+        error: 'SERVICE_CONFIG_ERROR_API_KEY_MISSING', // Specific error code
+        message: 'The TTS service is critically misconfigured: The GEMINI_API_KEY is missing in the server environment. Please contact the administrator to resolve this.' // Specific message
       });
     }
 

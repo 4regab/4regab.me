@@ -7,22 +7,17 @@ const TextToSpeechPage = () => {
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
       <main className="pt-20">
-        <section className="py-12 md:py-20">
-          <div className="container mx-auto px-4 max-w-4xl">
-            <div className="mb-8 md:mb-12 text-center">
-              <h1 className="text-3xl md:text-5xl font-bold mb-4 font-display animate-slide-up">
-                Text to Speech
-              </h1>
-              <p className="text-lg md:text-xl text-foreground/80 max-w-2xl mx-auto animate-slide-up" style={{ animationDelay: '0.2s' }}>
-                Convert text to natural-sounding speech using Gemini AI with multiple voice options
-              </p>
-            </div>
-            
-            <div className="animate-slide-up" style={{ animationDelay: '0.4s' }}>
-              <TextToSpeech />
-            </div>
+        <div className="relative overflow-hidden">
+          {/* Background gradients */}
+          <div className="absolute inset-0 bg-gradient-to-br from-neon-green/10 via-transparent to-neon-purple/10 pointer-events-none" />
+          <div className="absolute top-0 left-1/3 w-96 h-96 bg-neon-orange/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 right-1/3 w-96 h-96 bg-neon-blue/5 rounded-full blur-3xl" />
+          
+          {/* Content */}
+          <div className="relative z-10">
+            <TextToSpeech />
           </div>
-        </section>
+        </div>
       </main>
       <Footer />
     </div>
