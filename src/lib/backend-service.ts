@@ -5,6 +5,15 @@
 
 import { apiRequest, API_ENDPOINTS } from './api-config';
 
+// DIAGNOSTIC LOGGING - Remove after fixing
+const DEBUG_BACKEND = true;
+
+function debugLog(message: string, data?: unknown) {
+  if (DEBUG_BACKEND) {
+    console.log(`[BACKEND DEBUG] ${message}`, data);
+  }
+}
+
 export interface TranslationRequest {
   text: string;
   targetLanguage?: string;
@@ -55,32 +64,50 @@ export class BackendService {  /**
    * Translate text using the backend API
    */
   static async translate(request: TranslationRequest): Promise<TranslationResponse> {
+    debugLog('Translation request started:', request);
+    
     try {
+      const requestBody = {
+        text: request.text,
+        targetLanguage: request.targetLanguage || 'Filipino',
+        sourceLanguage: request.sourceLanguage || 'auto'
+      };
+        debugLog('Sending translation request:', { 
+        endpoint: API_ENDPOINTS.TRANSLATE, 
+        body: requestBody 
+      });
+      
+      // Call Vercel API function
       const response = await apiRequest<{
         success: boolean;
-        translation: string;
+        translatedText: string;
+        sourceLanguage: string;
+        targetLanguage: string;
         originalText: string;
       }>(
         API_ENDPOINTS.TRANSLATE,
         {
           method: 'POST',
-          body: JSON.stringify({
-            text: request.text,
-            targetLanguage: request.targetLanguage || 'Filipino',
-            sourceLanguage: request.sourceLanguage || 'auto'
-          })
+          body: JSON.stringify(requestBody)
         }
       );
 
-      // Transform server response to match expected interface
-      return {
-        translatedText: response.translation,
-        sourceLanguage: request.sourceLanguage || 'auto',
-        targetLanguage: request.targetLanguage || 'Filipino',
+      debugLog('Raw translation response:', response);
+
+      // Response already matches expected interface from Vercel API
+      const result = {
+        translatedText: response.translatedText,
+        sourceLanguage: response.sourceLanguage,
+        targetLanguage: response.targetLanguage,
         originalText: response.originalText,
         timestamp: new Date().toISOString()
       };
+      
+      debugLog('Transformed translation result:', result);
+      
+      return result;
     } catch (error) {
+      debugLog('Translation error occurred:', error);
       console.error('Translation error:', error);
       throw new Error(
         error instanceof Error 

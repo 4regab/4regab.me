@@ -3,26 +3,29 @@
  * Handles backend API endpoints for Render deployment
  */
 
-// Backend API Base URLs
-const BACKEND_URLS = {
-  development: 'http://localhost:3000',
-  production: 'https://4regab-ai-backend.onrender.com', // Update this with your actual Render URL
-} as const;
+// DIAGNOSTIC LOGGING - Remove after fixing
+const DEBUG_API = true;
 
-// Get the current environment
-const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const environment = isDevelopment ? 'development' : 'production';
+function debugLog(message: string, data?: unknown) {
+  if (DEBUG_API) {
+    console.log(`[API DEBUG] ${message}`, data);
+  }
+}
 
-// Current backend URL
-export const API_BASE_URL = BACKEND_URLS[environment];
+// Use relative URLs to work with both development (via Vite proxy) and production (Vercel functions)
+export const API_BASE_URL = '';
 
-// API Endpoints
+debugLog(`Using relative API URLs for Vercel functions`);
+
+// API Endpoints - relative URLs that work with Vercel functions
 export const API_ENDPOINTS = {
-  HEALTH: `${API_BASE_URL}/api/health`,
-  TRANSLATE: `${API_BASE_URL}/api/translate`,
-  CHAT: `${API_BASE_URL}/api/chat`,
-  TTS: `${API_BASE_URL}/api/tts`,
+  HEALTH: `/api/health`,
+  TRANSLATE: `/api/translate`,
+  CHAT: `/api/chat`,
+  TTS: `/api/tts`,
 } as const;
+
+debugLog('API Endpoints configured:', API_ENDPOINTS);
 
 // Request timeout (30 seconds)
 export const REQUEST_TIMEOUT = 30000;
@@ -45,6 +48,8 @@ export async function apiRequest<T = unknown>(
   url: string,
   options: RequestInit = {}
 ): Promise<T> {
+  debugLog(`Making API request to: ${url}`, { method: options.method || 'GET', headers: options.headers });
+  
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
@@ -58,8 +63,24 @@ export async function apiRequest<T = unknown>(
       signal: controller.signal,
     });
 
-    clearTimeout(timeoutId);    if (!response.ok) {
+    clearTimeout(timeoutId);
+
+    debugLog(`Response received:`, { 
+      status: response.status, 
+      statusText: response.statusText,
+      url: response.url,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+
+    if (!response.ok) {
       const errorData = await response.json().catch(() => ({})) as Record<string, unknown>;
+      
+      debugLog(`API Error Response:`, { 
+        status: response.status, 
+        errorData,
+        url 
+      });
+      
       throw new Error(
         (errorData.message as string) || 
         (errorData.error as string) || 
@@ -69,12 +90,22 @@ export async function apiRequest<T = unknown>(
 
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      return await response.json();
+      const jsonResponse = await response.json();
+      debugLog(`JSON Response:`, jsonResponse);
+      return jsonResponse;
     }
 
-    return await response.text() as T;
+    const textResponse = await response.text();
+    debugLog(`Text Response:`, textResponse);
+    return textResponse as T;
   } catch (error) {
     clearTimeout(timeoutId);
+    
+    debugLog(`API Request failed:`, { 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      url,
+      stack: error instanceof Error ? error.stack : undefined
+    });
     
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
