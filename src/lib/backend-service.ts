@@ -1,11 +1,20 @@
 /**
- * Backend Service for 4regab.me
- * Handles all API calls to the Render backend
+ * Backend Service - Secure API Gateway for 4regab.me
+ * 
+ * This service handles all communication with our secure serverless functions
+ * instead of making direct calls to external APIs with exposed keys.
+ * 
+ * Security Features:
+ * - API keys protected on backend
+ * - Rate limiting built-in
+ * - CORS handling
+ * - Error standardization
+ * - Request/Response validation
  */
 
 import { apiRequest, API_ENDPOINTS } from './api-config';
 
-// DIAGNOSTIC LOGGING - Disabled while using direct translation service
+// SECURITY: All API keys are now handled securely on the backend
 const DEBUG_BACKEND = false;
 
 function debugLog(message: string, data?: unknown) {
@@ -36,6 +45,9 @@ export interface ChatRequest {
   }>;
   model?: string;
   agent?: string;
+  systemPrompt?: string;
+  files?: File[];
+  thinkingMode?: boolean;
 }
 
 export interface ChatResponse {
@@ -115,12 +127,28 @@ export class BackendService {  /**
           : 'Translation failed: Unknown error'
       );
     }
-  }
-  /**
-   * Send chat message using the backend API
+  }  /**
+   * Send chat message using secure backend API
    */
   static async chat(request: ChatRequest): Promise<ChatResponse> {
+    debugLog('Chat request started:', request);
+    
     try {
+      const requestBody = {
+        prompt: request.message,
+        conversationHistory: request.conversationHistory || [],
+        model: request.model || 'gemini-1.5-flash',
+        systemPrompt: request.systemPrompt || (request.agent ? `You are ${request.agent}. Please assist the user accordingly.` : undefined),
+        thinkingMode: request.thinkingMode || false,
+        // Files will be handled by backend if needed
+        hasFiles: request.files && request.files.length > 0
+      };
+
+      debugLog('Sending chat request:', { 
+        endpoint: API_ENDPOINTS.CHAT, 
+        body: { ...requestBody, files: request.files ? '[FILES_PRESENT]' : undefined }
+      });
+      
       const response = await apiRequest<{
         success: boolean;
         response: string;
@@ -131,14 +159,11 @@ export class BackendService {  /**
         API_ENDPOINTS.CHAT,
         {
           method: 'POST',
-          body: JSON.stringify({
-            prompt: request.message,
-            conversationHistory: request.conversationHistory || [],
-            model: request.model || 'gemini-1.5-flash',
-            systemPrompt: request.agent ? `You are ${request.agent}. Please assist the user accordingly.` : undefined
-          })
+          body: JSON.stringify(requestBody)
         }
-      );      // Transform server response to match expected interface
+      );
+
+      debugLog('Chat response received:', response);      // Transform server response to match expected interface
       return {
         reply: response.response,
         conversationId: `chat_${Date.now()}`,

@@ -152,40 +152,7 @@ const TextToSpeech = () => {
       (voice.name.includes('Google') || voice.name.includes('Microsoft') || voice.default)
     ).slice(0, 2);
     
-    return popular.length > 0 ? popular : availableVoices.slice(0, 2);
-  };
-        setError("Audio playback failed. Please try downloading the file.");
-      };
-      
-      audio.src = audioUrl;
-      audio.load();
-      
-      setIsPlaying(true);
-      await audio.play();
-      
-    } catch (playError) {
-      console.error('Play error:', playError);
-      setIsPlaying(false);
-      setAudioElement(null);
-      setError("Unable to play audio. Please try downloading the file.");
-    }
-  };
-
-  const pauseAudio = () => {
-    if (audioElement && !audioElement.paused) {
-      audioElement.pause();
-      setIsPlaying(false);
-    }
-  };
-
-  const stopAudio = () => {
-    if (audioElement) {
-      audioElement.pause();
-      audioElement.currentTime = 0;
-      setIsPlaying(false);
-      setAudioElement(null);
-    }
-  };
+    return popular.length > 0 ? popular : availableVoices.slice(0, 2);  };
 
   const downloadAudio = () => {
     if (audioUrl) {
@@ -198,23 +165,11 @@ const TextToSpeech = () => {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && e.ctrlKey) {
-      generateSpeech();
+  const handleKeyPress = (e: React.KeyboardEvent) => {    if (e.key === 'Enter' && e.ctrlKey) {
+      speak();
     }
   };
-  // Clean up audio when component unmounts or audioUrl changes
-  useEffect(() => {
-    return () => {
-      if (audioElement) {
-        audioElement.pause();
-        setAudioElement(null);
-      }
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
-    };
-  }, [audioUrl, audioElement]);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header Section */}
@@ -281,7 +236,7 @@ const TextToSpeech = () => {
 
                 {/* Generate Button */}
                 <Button 
-                  onClick={generateSpeech} 
+                  onClick={speak} 
                   disabled={isLoading || !inputText.trim()}
                   className="w-full h-14 bg-gradient-to-r from-neon-purple-500/20 to-neon-blue-500/20 hover:from-neon-purple-500/30 hover:to-neon-blue-500/30 border border-neon-purple-500/30 text-white font-semibold text-lg transition-all duration-300 group"
                 >
@@ -357,22 +312,20 @@ const TextToSpeech = () => {
                       {isPlaying ? (
                         <Pause className="w-5 h-5 mr-2" />
                       ) : (
-                        <Play className="w-5 h-5 mr-2" />
-                      )}
+                        <Play className="w-5 h-5 mr-2" />                      )}
                       {isPlaying ? "Pause" : "Play"}
                     </Button>
                     
-                    {audioElement && (
-                      <Button
-                        onClick={stopAudio}
-                        variant="outline"
-                        size="lg"
-                        className="h-12 px-4 border-red-500/30 hover:bg-red-500/10 text-foreground"
-                      >
-                        <Square className="w-4 h-4 mr-2" />
-                        Stop
-                      </Button>
-                    )}
+                    <Button
+                      onClick={stop}
+                      variant="outline"
+                      size="lg"
+                      className="h-12 px-4 border-red-500/30 hover:bg-red-500/10 text-foreground"
+                      disabled={!isPlaying && !isPaused}
+                    >
+                      <Square className="w-4 h-4 mr-2" />
+                      Stop
+                    </Button>
                     
                     <Button
                       onClick={downloadAudio}

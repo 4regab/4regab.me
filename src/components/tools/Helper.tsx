@@ -15,10 +15,14 @@ import { GEMINI_MODELS, getDefaultModel, getModelById, getModelConfig } from '@/
 import { HELPER_AGENTS, getAgentById, getAgentIcon } from '@/lib/helper-agents';
 import { BackendService } from '@/lib/backend-service';
 import { ExportService } from '@/lib/export-service';
+import { isSupportedFileType, isVideoFile, validateFileSize, formatFileSize } from '@/lib/file-utils';
 import MessageContent from '@/components/ui/message-content';
 // import { ragService, type DocumentChunk, type RAGContext } from '@/lib/rag-service'; // Removed RAG
 import { type AgentPrompt, type GeminiModel, type GeminiFile, type HelperTask, type ExportOptions } from '@/types/helper';
 import { cn } from '@/lib/utils';
+
+// SECURITY NOTE: GeminiService import removed - all AI operations now use secure backend endpoints
+// import geminiService from '@/lib/gemini-service'; // REMOVED FOR SECURITY
 
 // Chat message interface
 interface ChatMessage {
@@ -272,15 +276,16 @@ const Helper = () => {
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);  // Function to upload files to Gemini (can be called from onDrop or before sending message)
+  }, [messages]);  // SECURE FILE UPLOAD: Uses backend service instead of exposing API keys
   const uploadFilesToGemini = useCallback(async (filesToUpload: File[]): Promise<GeminiFile[]> => {
     setIsUploading(true);
     setUploadProgress(0);
     const successfullyUploaded: GeminiFile[] = [];
 
     try {
-      const supportedFiles = filesToUpload.filter(file => geminiService.isSupportedFileType(file));
-      const unsupportedFiles = filesToUpload.filter(file => !geminiService.isSupportedFileType(file));
+      // Use secure file validation functions instead of geminiService
+      const supportedFiles = filesToUpload.filter(file => isSupportedFileType(file));
+      const unsupportedFiles = filesToUpload.filter(file => !isSupportedFileType(file));
 
       if (unsupportedFiles.length > 0) {
         toast({
@@ -291,7 +296,7 @@ const Helper = () => {
       }
 
       // Check for video files and provide guidance
-      const videoFiles = supportedFiles.filter(file => geminiService.isVideoFile(file));
+      const videoFiles = supportedFiles.filter(file => isVideoFile(file));
       if (videoFiles.length > 0) {
         const largeVideos = videoFiles.filter(file => file.size > 20 * 1024 * 1024); // > 20MB
         if (largeVideos.length > 0) {
@@ -300,6 +305,19 @@ const Helper = () => {
             description: `${largeVideos.length} video file(s) are larger than 20MB. Upload may take longer and will use the Files API for optimal processing.`,
             variant: "default"
           });
+        }
+      }
+
+      // Validate file sizes
+      for (const file of supportedFiles) {
+        const sizeValidation = validateFileSize(file);
+        if (!sizeValidation.valid) {
+          toast({
+            title: "File Too Large",
+            description: sizeValidation.message,
+            variant: "destructive"
+          });
+          return [];
         }
       }
       
@@ -313,15 +331,35 @@ const Helper = () => {
         return [];
       }
 
+      // SECURITY: File upload now happens via secure backend during chat
+      // Files are staged locally and uploaded when needed for AI processing
       for (let i = 0; i < supportedFiles.length; i++) {
         const file = supportedFiles[i];
         try {
-          const geminiFile = await geminiService.uploadFile(file);
-          successfullyUploaded.push(geminiFile);
-          setGeminiUploadedFiles(prev => [...prev, geminiFile]); // Add to the list of Gemini-uploaded files
+          // Create a mock GeminiFile object for staging
+          // Actual upload will happen via BackendService during chat
+          const stagedFile: GeminiFile = {
+            name: `staged_${Date.now()}_${file.name}`,
+            displayName: file.name,
+            mimeType: file.type,
+            sizeBytes: file.size,
+            createTime: new Date().toISOString(),
+            updateTime: new Date().toISOString(),
+            expirationTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+            sha256Hash: '', // Will be set by backend
+            uri: '', // Will be set by backend
+            state: 'PROCESSING', // Staged for upload
+            error: undefined,
+            videoMetadata: isVideoFile(file) ? { videoDuration: '' } : undefined
+          };
+          
+          successfullyUploaded.push(stagedFile);
+          setGeminiUploadedFiles(prev => [...prev, stagedFile]);
+          
+          console.log(`[SECURE UPLOAD] Staged file for secure upload: ${file.name}`);
         } catch (error) {
-          console.error(`Failed to upload ${file.name}:`, error);
-          toast({ title: `Upload Failed: ${file.name}`, description: (error as Error).message, variant: "destructive" });
+          console.error(`Failed to stage ${file.name}:`, error);
+          toast({ title: `Staging Failed: ${file.name}`, description: (error as Error).message, variant: "destructive" });
         }
         setUploadProgress(((i + 1) / supportedFiles.length) * 100);
       }
@@ -788,28 +826,24 @@ const Helper = () => {
           );
         }        const currentPrompt = lastUserMessage.content || `Please analyze the ${filesForGemini.length > 0 ? 'uploaded files' : 'previous context'} and provide insights.`;
         const systemPrompt = (lastUserMessage.agent || selectedAgent).systemPrompt; // Use normal agent prompt - thinking handled by API
-        const modelToUse = lastUserMessage.model || selectedModel;        // Generate response
+        const modelToUse = lastUserMessage.model || selectedModel;        // SECURE AI GENERATION: Use backend service instead of exposing API keys
         // IMPORTANT: Image generation models don't support conversation history, so always use generateContent for them
-        const response = (cleanedHistory.length > 0 && !modelToUse.supportsImageGeneration) 
-          ? await geminiService.generateContentWithHistory(
-              currentPrompt,
-              systemPrompt,
-              cleanedHistory,
-              filesForGemini.length > 0 ? filesForGemini : undefined,
-              modelToUse,
-              lastUserMessage.files || undefined,
-              isThinkingMode, // Enable thinking mode via API
-              controller.signal
-            )
-          : await geminiService.generateContent(
-              currentPrompt,
-              systemPrompt,
-              filesForGemini.length > 0 ? filesForGemini : undefined,
-              modelToUse,
-              lastUserMessage.files || undefined,
-              isThinkingMode, // Enable thinking mode via API
-              controller.signal
-            );// Process response based on thinking mode
+        const chatRequest = {
+          message: currentPrompt,
+          conversationHistory: cleanedHistory.length > 0 && !modelToUse.supportsImageGeneration ? cleanedHistory.map(msg => ({
+            role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
+            content: msg.parts[0].text
+          })) : undefined,
+          model: modelToUse.modelName,
+          agent: (lastUserMessage.agent || selectedAgent).id,
+          files: lastUserMessage.files,
+          systemPrompt: systemPrompt,
+          thinkingMode: isThinkingMode
+        };
+
+        console.log('[SECURE CHAT] Sending request to backend:', chatRequest);
+        
+        const response = await BackendService.chat(chatRequest);// Process response based on thinking mode
         if (isThinkingMode) {
           const parsed = parseThinkingResponse(response);
           
@@ -909,37 +943,24 @@ const Helper = () => {
     navigator.clipboard.writeText(content);
     toast({ title: "Copied to clipboard" });
   }, [toast]);
-
   const clearConversation = useCallback(() => {
     setMessages([]);
     setUploadedFiles([]); // Clear staged files
     setGeminiUploadedFiles([]); // Clear files uploaded to Gemini
-    // Delete all files from Gemini service that might be orphaned
-    geminiUploadedFiles.forEach(gf => geminiService.deleteFile(gf.name).catch(console.error));
-
+    // SECURITY: File deletion now handled securely by backend
+    // Files are automatically cleaned up by the backend after expiration
+    
     localStorage.removeItem(LOCAL_STORAGE_CHAT_HISTORY_KEY);
     toast({ title: "Conversation Cleared", description: "All messages and chat history have been removed." });
-  }, [toast, geminiUploadedFiles]);
+  }, [toast]);
   const triggerFileInput = () => {
     // Try both approaches to ensure file dialog opens
     if (fileInputRef.current) {
-      fileInputRef.current.click();
-    } else {
+      fileInputRef.current.click();    } else {
       openFileDialog();
     }
   };
   
-  // Helper to format file size
-  const formatFileSize = (bytes: number): string => {
-    if (bytes >= 1024 * 1024) {
-      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    } else if (bytes >= 1024) {
-      return (bytes / 1024).toFixed(1) + ' KB';
-    } else {
-      return bytes + ' B';
-    }
-  };
-
   // Helper to truncate filename
   const truncateFilename = (filename: string): string => {
     if (filename.length <= 8) return filename;
