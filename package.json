@@ -21,7 +21,8 @@
   "bugs": {
     "url": "https://github.com/4regab/4regab/issues"
   },
-  "license": "MIT",  "author": {
+  "license": "MIT",
+  "author": {
     "name": "4regab",
     "url": "https://4regab.me"
   },
@@ -75,6 +76,7 @@
     "@radix-ui/react-toggle-group": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.4",
     "@tanstack/react-query": "^5.56.2",
+    "@vercel/node": "^5.2.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
