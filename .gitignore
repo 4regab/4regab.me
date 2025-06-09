@@ -61,6 +61,8 @@ coverage/
 
 # TypeScript
 *.tsbuildinfo
+src/**/*.js
+src/**/*.d.ts
 
 # API Keys and secrets (if any config files contain them)
 config/secrets.json
