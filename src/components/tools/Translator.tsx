@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Languages, Send, Copy, Check, ArrowRight, Globe, Zap, RefreshCw } from "lucide-react";
+import { Languages, Send, Copy, Check, ArrowUpDown, Globe, Zap, RefreshCw, X, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ const Translator = () => {
   const [isCopied, setIsCopied] = useState(false);
   const [lastRequestTime, setLastRequestTime] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
+  const [showTips, setShowTips] = useState(false);
 
   // Rate limiting utility - minimum 2 seconds between requests
   const RATE_LIMIT_MS = 2000;
@@ -127,7 +128,6 @@ const Translator = () => {
       translateText();
     }
   };
-
   const clearAll = () => {
     setInputText("");
     setTranslatedText("");
@@ -136,7 +136,7 @@ const Translator = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
       <div className="text-center space-y-4 mb-8">
         <div className="flex items-center justify-center gap-3 mb-4">
@@ -153,222 +153,213 @@ const Translator = () => {
       </div>
 
       {/* Main Translation Interface */}
-      <Card className="neo-card neon-border">
-        <CardContent className="p-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <Card className="neo-card border-2 border-foreground/10">
+        <CardContent className="p-6 space-y-6">
+          
+          {/* Language Labels */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-neon-green/80"></div>
+              <Label className="text-sm font-semibold text-foreground">English</Label>
+            </div>
             
-            {/* Source Language Panel */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-lg bg-neon-green/20 neon-border-green">
-                  <Globe size={20} className="text-neon-green" />
-                </div>
-                <div>
-                  <Label className="text-lg font-bold text-foreground">English</Label>
-                  <p className="text-sm text-foreground/70">Source language</p>
-                </div>
-              </div>
-              
-              <div className="space-y-3">
-                <Textarea
-                  placeholder="Enter English text to translate... Type anything from simple phrases to complex sentences, and our AI will provide natural Tagalog translations."
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={handleKeyPress}
-                  className="min-h-[300px] resize-none text-base leading-relaxed neon-border font-medium placeholder:text-foreground/40 text-foreground bg-background/50"
-                />
-                <div className="flex justify-between items-center text-sm text-foreground/60">
-                  <span>{inputText.length} characters</span>
-                  <span className="text-xs bg-foreground/10 px-2 py-1 rounded">
-                    Press Ctrl + Enter to translate
-                  </span>
-                </div>
-              </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 rounded-full border border-foreground/20 hover:border-neon-purple/50 hover:bg-neon-purple/10 transition-all duration-200"
+                title="Language swap (coming soon)"
+                disabled
+              >
+                <ArrowUpDown size={14} className="text-foreground/60" />
+              </Button>
             </div>
-
-            {/* Arrow/Divider */}
-            <div className="hidden lg:flex items-center justify-center">
-              <div className="flex flex-col items-center gap-4">
-                <div className="p-3 rounded-full bg-neon-purple/20 neon-border-purple">
-                  <ArrowRight className="text-neon-purple" size={24} />
-                </div>
-                <div className="text-xs text-foreground/60 font-medium">
-                  AI Translation
-                </div>
-              </div>
+            
+            <div className="flex items-center gap-2">
+              <Label className="text-sm font-semibold text-foreground">Tagalog</Label>
+              <div className="w-4 h-4 rounded-full bg-neon-orange/80"></div>
             </div>
+          </div>
 
-            {/* Target Language Panel */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-lg bg-neon-orange/20 neon-border-orange">
-                  <Globe size={20} className="text-neon-orange" />
-                </div>
-                <div>
-                  <Label className="text-lg font-bold text-foreground">Tagalog</Label>
-                  <p className="text-sm text-foreground/70">Target language</p>
-                </div>
-              </div>
-              
-              <div className="space-y-3">
-                <div className={cn(
-                  "min-h-[300px] p-4 rounded-lg border-2 bg-background/50 transition-all duration-200",
-                  translatedText 
-                    ? "neon-border-green bg-neon-green/5" 
-                    : "border-foreground/20"
-                )}>
-                  {translatedText ? (
-                    <p className="text-base leading-relaxed font-medium text-foreground whitespace-pre-wrap">
-                      {translatedText}
-                    </p>
+          {/* Input Section */}
+          <div className="space-y-3">
+            <div className="relative">
+              <Textarea
+                placeholder="Enter English text to translate..."
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={handleKeyPress}
+                className={cn(
+                  "min-h-[140px] resize-none text-base leading-relaxed font-medium placeholder:text-foreground/40 text-foreground bg-background/50 border-2 transition-all duration-200",
+                  inputText ? "border-neon-green/50 bg-neon-green/5" : "border-foreground/20"
+                )}
+              />
+              {inputText && (
+                <Button
+                  onClick={() => setInputText("")}
+                  variant="ghost"
+                  size="sm"
+                  className="absolute top-3 right-3 h-6 w-6 p-0 rounded-full hover:bg-foreground/10"
+                >
+                  <X size={14} />
+                </Button>
+              )}
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-foreground/60">{inputText.length} characters</span>
+              <div className="flex items-center gap-2">
+                <Button 
+                  onClick={translateText} 
+                  disabled={isLoading || !inputText.trim()}
+                  className={cn(
+                    "bg-neon-blue hover:bg-neon-blue/90 text-white font-semibold h-10 px-6 transition-all duration-300",
+                    isLoading && "animate-pulse"
+                  )}
+                >
+                  {isLoading ? (
+                    <RefreshCw className="animate-spin w-4 h-4 mr-2" />
                   ) : (
-                    <p className="text-foreground/40 text-base">
-                      {isLoading 
-                        ? "Translating your text..." 
-                        : "Translation will appear here..."
-                      }
-                    </p>
+                    <Send size={16} className="mr-2" />
                   )}
-                </div>
-                <div className="flex justify-between items-center text-sm text-foreground/60">
-                  <span>{translatedText.length} characters</span>
-                  {translatedText && (
-                    <span className="text-xs bg-neon-green/20 text-neon-green px-2 py-1 rounded">
-                      Translation complete
-                    </span>
-                  )}
-                </div>
+                  {isLoading 
+                    ? retryCount > 0 
+                      ? `Retrying...` 
+                      : "Translating..."
+                    : "Translate"
+                  }
+                </Button>
               </div>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-3 mt-8 pt-6 border-t border-foreground/10">
-            <Button 
-              onClick={translateText} 
-              disabled={isLoading || !inputText.trim()}
-              className="bg-neon-blue/20 neon-border-blue hover:bg-neon-blue/30 transition-all duration-300 h-12 px-6 font-semibold text-white group"
-            >
-              {isLoading ? (
-                <RefreshCw className="animate-spin w-5 h-5 mr-2 text-white" />
+          {/* Output Section */}
+          <div className="space-y-3">
+            <div className={cn(
+              "min-h-[140px] p-4 rounded-lg border-2 transition-all duration-300",
+              translatedText 
+                ? "border-neon-orange/50 bg-neon-orange/5" 
+                : "border-foreground/20 bg-background/50"
+            )}>
+              {translatedText ? (
+                <p className="text-base leading-relaxed font-medium text-foreground whitespace-pre-wrap">
+                  {translatedText}
+                </p>
               ) : (
-                <Send size={18} className="mr-2 text-white group-hover:scale-110 transition-transform" />
+                <p className="text-foreground/40 text-base">
+                  {isLoading 
+                    ? "Translating your text..." 
+                    : "Translation will appear here..."
+                  }
+                </p>
               )}
-              {isLoading 
-                ? retryCount > 0 
-                  ? `Retrying... (${retryCount}/${MAX_RETRIES})` 
-                  : "Translating..."
-                : "Translate"
-              }
-            </Button>
-                    
-            {translatedText && (
-              <Button
-                onClick={copyToClipboard}
-                variant="outline"
-                className="neon-border-green hover:bg-neon-green/10 h-12 px-6 font-semibold"
-              >
-                {isCopied ? (
-                  <Check size={18} className="mr-2 text-neon-green" />
-                ) : (
-                  <Copy size={18} className="mr-2" />
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-foreground/60">{translatedText.length} characters</span>
+              <div className="flex items-center gap-2">
+                {translatedText && (
+                  <>
+                    <Button
+                      onClick={copyToClipboard}
+                      variant="outline"
+                      size="sm"
+                      className="h-9 px-4 border-neon-green/50 hover:bg-neon-green/10 hover:border-neon-green transition-all duration-200"
+                    >
+                      {isCopied ? (
+                        <Check size={14} className="mr-2 text-neon-green" />
+                      ) : (
+                        <Copy size={14} className="mr-2" />
+                      )}
+                      {isCopied ? "Copied!" : "Copy"}
+                    </Button>
+                    <Button
+                      onClick={clearAll}
+                      variant="outline"
+                      size="sm"
+                      className="h-9 px-4 border-foreground/20 hover:bg-red-500/10 hover:border-red-500/50 transition-all duration-200"
+                    >
+                      Clear All
+                    </Button>
+                  </>
                 )}
-                {isCopied ? "Copied!" : "Copy Translation"}
-              </Button>
-            )}
-
-            {(inputText || translatedText) && (
-              <Button
-                onClick={clearAll}
-                variant="outline"
-                className="neon-border-red hover:bg-red-500/10 h-12 px-6 font-medium"
-              >
-                Clear All
-              </Button>
-            )}
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Error Display */}
       {error && (
-        <Alert className={`p-4 ${
+        <Alert className={cn(
+          "border-2 transition-all duration-200",
           error.includes('Service overloaded') || error.includes('Please wait') 
             ? 'border-yellow-500/50 bg-yellow-500/10' 
             : 'border-red-500/50 bg-red-500/10'
-        }`}>
-          <AlertDescription className={`font-medium leading-relaxed ${
+        )}>
+          <AlertDescription className={cn(
+            "font-medium leading-relaxed",
             error.includes('Service overloaded') || error.includes('Please wait')
               ? 'text-yellow-300'
               : 'text-red-300'
-          }`}>
+          )}>
             {error}
-            {(error.includes('Service overloaded') || error.includes('Please wait')) && (
-              <div className="mt-3 text-sm text-yellow-200 space-y-1">
-                <p><strong>💡 Tips:</strong></p>
-                <ul className="list-disc list-inside space-y-1 ml-4">
-                  <li>Wait at least 2 seconds between requests</li>
-                  <li>The service automatically handles retries with smart backoff</li>
-                  <li>Your request will be processed as soon as possible</li>
-                </ul>
-              </div>
-            )}
           </AlertDescription>
         </Alert>
       )}
 
-      {/* Features & Tips */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="neo-card neon-border">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3 mb-3">
-              <Zap className="text-neon-yellow" size={24} />
-              <h3 className="font-bold text-foreground">Instant Translation</h3>
+      {/* Collapsible Tips Section */}
+      <Card className="neo-card border-2 border-foreground/10">
+        <CardContent className="p-4">
+          <Button
+            onClick={() => setShowTips(!showTips)}
+            variant="ghost"
+            className="w-full flex items-center justify-between p-0 h-auto hover:bg-transparent"
+          >
+            <div className="flex items-center gap-2">
+              <Zap className="text-neon-yellow" size={20} />
+              <span className="font-semibold text-foreground">Tips & Features</span>
             </div>
-            <p className="text-sm text-foreground/70">
-              Fast, accurate English to Tagalog translation powered by advanced AI
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="neo-card neon-border">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3 mb-3">
-              <Globe className="text-neon-green" size={24} />
-              <h3 className="font-bold text-foreground">Natural Language</h3>
+            {showTips ? (
+              <ChevronUp size={20} className="text-foreground/60" />
+            ) : (
+              <ChevronDown size={20} className="text-foreground/60" />
+            )}
+          </Button>
+          
+          {showTips && (
+            <div className="mt-4 space-y-4 border-t border-foreground/10 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Globe className="text-neon-green" size={16} />
+                    <h4 className="font-semibold text-sm text-foreground">Natural Language</h4>
+                  </div>
+                  <p className="text-xs text-foreground/70">
+                    Contextual translations that sound natural and culturally appropriate
+                  </p>
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Languages className="text-neon-blue" size={16} />
+                    <h4 className="font-semibold text-sm text-foreground">Smart Processing</h4>
+                  </div>
+                  <p className="text-xs text-foreground/70">
+                    Handles complex sentences, idioms, and colloquial expressions
+                  </p>
+                </div>
+              </div>
+              
+              <div className="text-center space-y-2 pt-2 border-t border-foreground/10">
+                <div className="text-xs text-foreground/70 space-y-1">
+                  <div>💡 <strong>Pro Tip:</strong> Use complete sentences for better translations</div>
+                  <div>⌨️ <strong>Shortcut:</strong> Press Ctrl + Enter to translate</div>
+                  <div>⏱️ <strong>Rate Limited:</strong> 2-second delay between requests for optimal performance</div>
+                </div>
+              </div>
             </div>
-            <p className="text-sm text-foreground/70">
-              Contextual translations that sound natural and culturally appropriate
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="neo-card neon-border">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3 mb-3">
-              <Languages className="text-neon-blue" size={24} />
-              <h3 className="font-bold text-foreground">Smart Processing</h3>
-            </div>
-            <p className="text-sm text-foreground/70">
-              Handles complex sentences, idioms, and colloquial expressions
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Usage Tips */}
-      <Card className="neo-card neon-border">
-        <CardContent className="pt-6">
-          <div className="text-center space-y-3">
-            <div className="text-sm text-foreground/80 font-medium">
-              💡 <strong>Pro Tips:</strong> Use complete sentences for better translations • Try different phrasings for varied results
-            </div>
-            <div className="text-xs text-foreground/60 leading-relaxed space-y-1">
-              <div>🔒 <strong>Secure Service:</strong> All translations are processed securely on our servers</div>
-              <div>⏱️ <strong>Rate Limited:</strong> Automatic 2-second delay between requests for optimal performance</div>
-              <div>🔄 <strong>Auto-Retry:</strong> Failed requests are automatically retried with smart backoff timing</div>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>
