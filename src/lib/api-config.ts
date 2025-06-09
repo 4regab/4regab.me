@@ -3,8 +3,8 @@
  * Handles backend API endpoints for Render deployment
  */
 
-// DIAGNOSTIC LOGGING - Remove after fixing
-const DEBUG_API = true;
+// DIAGNOSTIC LOGGING - Disabled while using direct translation service
+const DEBUG_API = false;
 
 function debugLog(message: string, data?: unknown) {
   if (DEBUG_API) {

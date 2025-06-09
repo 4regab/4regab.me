@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { BackendService } from "@/lib/backend-service";
+import { DirectTranslationService } from "@/lib/direct-translation-service";
 
 const Translator = () => {
   const [inputText, setInputText] = useState("");
@@ -51,13 +51,12 @@ const Translator = () => {
     const attemptTranslation = async (): Promise<void> => {
       try {        // Check rate limiting before making request
         checkRateLimit();
-        
-        // Use the backend service for translation
-        const response = await BackendService.translate({
+          // Use the direct translation service (temporary fix for backend issues)
+        const response = await DirectTranslationService.translate({
           text: inputText.trim(),
           targetLanguage: 'Filipino',
           sourceLanguage: 'auto'
-        });        setTranslatedText(response.translatedText);
+        });setTranslatedText(response.translatedText);
         setRetryCount(0); // Reset retry count on success
       } catch (err) {
         if (err instanceof Error) {

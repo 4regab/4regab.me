@@ -5,8 +5,8 @@
 
 import { apiRequest, API_ENDPOINTS } from './api-config';
 
-// DIAGNOSTIC LOGGING - Remove after fixing
-const DEBUG_BACKEND = true;
+// DIAGNOSTIC LOGGING - Disabled while using direct translation service
+const DEBUG_BACKEND = false;
 
 function debugLog(message: string, data?: unknown) {
   if (DEBUG_BACKEND) {
