@@ -1,0 +1,42 @@
+# Development files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Server-only files
+server/
+api/tsconfig.json
+
+# Build cache
+node_modules/.cache/
+.vite/
+
+# Documentation (not needed for frontend)
+*.md
+!README.md
+
+# Setup scripts
+setup.sh
+setup.ps1
+
+# Render-specific files
+render.yaml
+.env.render.example
+.env.production.example
+
+# Development dependencies
+package-lock.json
+bun.lockb
