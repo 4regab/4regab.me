@@ -19,8 +19,8 @@ export interface DirectTranslationResponse {
 }
 
 // IMPORTANT: In production, this should be moved to a secure backend
-// This is a temporary client-side solution
-const GEMINI_API_KEY = 'AIzaSyDcGWQ6aRGPO8rLw8X6V6F6CJKx6CcfKzU'; // Replace with your actual key
+// This is a temporary client-side solution  
+const GEMINI_API_KEY = 'AIzaSyBZkHM28PzQVGIzy0OgiM4InHOP5_17L_E';
 
 export class DirectTranslationService {
   /**
