@@ -8,10 +8,9 @@
         "distDir": "dist"
       }
     }
-  ],
-  "rewrites": [
+  ],  "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api).*)",
       "destination": "/index.html"
     }
   ],
